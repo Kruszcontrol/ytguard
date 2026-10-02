@@ -402,7 +402,6 @@ func Policy(extID string, opt Options, blocklist []string) map[string]any {
 		extID: map[string]any{
 			"installation_mode": "force_installed",
 			"update_url":        "http://" + ExtAddr + "/ext/updates.xml",
-			"toolbar_pin":       "force_unpinned",
 		},
 	}
 	if !opt.AllowExtensions {
