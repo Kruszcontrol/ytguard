@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"html/template"
 	"log/slog"
+	"os/user"
+	"strconv"
 	"strings"
 	"time"
 
@@ -26,6 +28,7 @@ type Report struct {
 	Blocked   []Attempt     `json:"blocked"`
 	Hidden    []Attempt     `json:"hidden"`
 	Requests  []RequestLine `json:"requests"`
+	OtherApps []string      `json:"other_apps"` // other browsers / video apps seen that day
 	PublicURL string        `json:"review_url,omitempty"`
 }
 
@@ -102,6 +105,24 @@ func Build(st *store.Store, k store.Kid, day string) (Report, error) {
 	for _, q := range reqs {
 		r.Requests = append(r.Requests, RequestLine{Title: orUnknown(q.Title), Channel: q.ChannelName, Status: q.Status, Message: q.Message})
 	}
+	uid := -2
+	if u, err := user.Lookup(k.LinuxUser); err == nil {
+		uid, _ = strconv.Atoi(u.Uid)
+	}
+	fs, _ := st.Findings(t.Unix(), false)
+	for _, f := range fs {
+		if f.FirstSeen >= timekeeper.EndOfDay(t).Unix() || (f.UID != uid && f.UID != -1) {
+			continue
+		}
+		line := f.App + " — " + f.How + " (" + f.Location + ")"
+		if f.UID == -1 {
+			line += " [everyone on this PC]"
+		}
+		if f.Kind == "running" {
+			line = "RUNNING: " + line
+		}
+		r.OtherApps = append(r.OtherApps, line)
+	}
 	return r, nil
 }
 
@@ -148,6 +169,12 @@ func (r Report) Text() string {
 			fmt.Fprintf(&b, "%s — %s: %s\n", q.Title, q.Channel, q.Status)
 		}
 	}
+	if len(r.OtherApps) > 0 {
+		b.WriteString("\nOther browsers / video apps found (not controlled by YTGuard):\n")
+		for _, a := range r.OtherApps {
+			fmt.Fprintf(&b, "  %s\n", a)
+		}
+	}
 	if r.PublicURL != "" {
 		fmt.Fprintf(&b, "\nManage: %s\n", r.PublicURL)
 	}
@@ -171,6 +198,9 @@ var htmlTmpl = template.Must(template.New("report").Parse(`<!doctype html>
 {{range .Hidden}}<li style="margin:4px 0"><a href="{{.URL}}">{{.Title}}</a> — {{.Channel}} <span style="color:#71717a;font-size:13px">{{.Time}} · {{.Reason}}</span></li>{{end}}</ul>{{end}}
 {{if .Requests}}<h3 style="margin:20px 0 6px">Requests</h3><ul style="padding-left:18px;margin:0">
 {{range .Requests}}<li style="margin:4px 0">{{.Title}} — {{.Channel}}: <b>{{.Status}}</b>{{if .Message}} “{{.Message}}”{{end}}</li>{{end}}</ul>{{end}}
+{{if .OtherApps}}<h3 style="margin:20px 0 6px;color:#b91c1c">Other browsers / video apps found</h3>
+<p style="margin:0 0 6px;color:#52525b;font-size:13px">YTGuard doesn't control these; they could be used to watch YouTube without limits.</p>
+<ul style="padding-left:18px;margin:0">{{range .OtherApps}}<li style="margin:4px 0">{{.}}</li>{{end}}</ul>{{end}}
 {{if .PublicURL}}<p style="margin-top:20px"><a href="{{.PublicURL}}">Open YTGuard</a></p>{{end}}
 </div></body></html>`))
 

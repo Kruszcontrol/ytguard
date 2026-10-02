@@ -43,7 +43,17 @@ func (s *Server) dashboard(w http.ResponseWriter, r *req) {
 	if st.PublicURL == "" {
 		warnings = append(warnings, "Set this PC's address (Public URL) in Settings so reports and notifications can link here.")
 	}
-	s.page(w, r, "dashboard", map[string]any{"States": states, "Pending": pending, "Warnings": warnings, "Now": time.Now().Unix()})
+	s.page(w, r, "dashboard", map[string]any{"States": states, "Pending": pending, "Warnings": warnings, "Now": time.Now().Unix(),
+		"Findings": s.App.ActiveFindings()})
+}
+
+func (s *Server) findingDismiss(w http.ResponseWriter, r *req) {
+	key := r.FormValue("key")
+	err := s.App.DismissFinding(key)
+	if err == nil {
+		s.App.St.Audit("admin", r.IP, "app finding dismissed", key)
+	}
+	back(w, r, "/", "Dismissed. It won't be shown again.", err)
 }
 
 func (s *Server) kidAction(w http.ResponseWriter, r *req) {
@@ -693,6 +703,7 @@ func (s *Server) settingsSave(w http.ResponseWriter, r *req) {
 	st.EmbedOrigins = strings.Join(origins, " ")
 	st.SessionDays = min(max(formInt(r, "session_days", 90), 1), 400)
 	st.UpdateCheck = r.FormValue("update_check") == "on"
+	st.AppScan = r.FormValue("app_scan") == "on"
 	if err := s.App.St.SaveSettings(st); err != nil {
 		back(w, r, "/settings", "", err)
 		return

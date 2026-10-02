@@ -4,7 +4,7 @@ YTGuard talks to Home Assistant in two directions:
 
 | Direction | How | Used for |
 |---|---|---|
-| YTGuard → HA | HA **webhook** (secret URL) | daily reports, approval requests, "time's up", parent logins |
+| YTGuard → HA | HA **webhook** (secret URL) | daily reports, approval requests, "time's up", parent logins, other browsers found, updates |
 | HA → YTGuard | REST API with a scoped **API token** | sensors (time used/left, watching now, pending requests), bonus time, pause, approve/deny |
 
 Each kid PC runs its own YTGuard, so repeat the steps below per PC (examples use a PC called `kidpc`).
@@ -25,6 +25,7 @@ Payloads (all have `type`, `pc`, `time`):
 - `time_up`: `kid`, `used_minutes`
 - `admin_login`: `device`, `ip`
 - `update_available`: `current`, `latest`, `url` (release notes), `notes`, `how` (sent once per new release)
+- `unapproved_app`: `kid` ("Everyone on this PC" for system-wide installs), `app`, `kind` (`running`/`installed`), `how`, `where`, `message` (sent once per new finding)
 - `test`: `summary`
 
 ## 2. API token (HA → YTGuard)
@@ -65,6 +66,8 @@ rest:
         value_template: "{{ value_json.ytguard.version }}"
         json_attributes_path: "$.ytguard"
         json_attributes: [latest_version, update_available, release_url, update_checked]
+      - name: "YTGuard kidpc other browsers"   # other browsers / video apps found
+        value_template: "{{ value_json.other_apps }}"
 
 rest_command:
   ytguard_kidpc_bonus:
@@ -156,6 +159,12 @@ automation:
                   message: >-
                     {{ trigger.json.latest }} is available (installed: {{ trigger.json.current }}).
                     [Release notes]({{ trigger.json.url }}). To install, run on that PC: `sudo ytguard upgrade`
+          - conditions: "{{ trigger.json.type == 'unapproved_app' }}"
+            sequence:
+              - action: notify.mobile_app_your_phone
+                data:
+                  title: "Other browser found on {{ trigger.json.pc }}"
+                  message: "{{ trigger.json.message }}"
           - conditions: "{{ trigger.json.type in ['time_up', 'admin_login', 'test'] }}"
             sequence:
               - action: notify.mobile_app_your_phone

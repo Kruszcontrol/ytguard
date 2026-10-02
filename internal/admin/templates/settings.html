@@ -59,6 +59,13 @@
     {{if $s.YouTubeAPIKey}}<span class="check small"><input type="checkbox" name="yt_key_clear"> clear</span>{{end}}</label>
   <p class="muted small">With a free key from Google Cloud Console (YouTube Data API v3), description, tag, category and made-for-kids rules also apply to thumbnails in feeds and search, not just when a video is opened.</p>
 </div>
+<div class="card">
+  <h2>Other browsers &amp; video apps</h2>
+  <label class="check"><input type="checkbox" name="app_scan" {{if $s.AppScan}}checked{{end}}> Look for other browsers and YouTube apps kids could use instead of Chrome</label>
+  <p class="muted small">Checks kids' running programs every minute, and (hourly) their home folders, Flatpaks and system-wide browsers.
+    Finds portable browsers, Tor Browser, AppImages, FreeTube, yt-dlp and similar. Results show on the dashboard and go to Home Assistant.
+    It can't remove them.</p>
+</div>
 <div class="card" id="updates">
   <h2>Updates</h2>
   {{with $.Update}}

@@ -179,6 +179,12 @@ func (s *Server) apiState(w http.ResponseWriter, r *http.Request, _ store.APITok
 		yt["update_checked"] = u.Checked.Format(time.RFC3339)
 	}
 	out["ytguard"] = yt
+	findings := s.App.ActiveFindings()
+	if findings == nil {
+		findings = []core.FindingView{}
+	}
+	out["other_apps"] = len(findings)
+	out["other_apps_list"] = findings
 	apiJSON(w, out)
 }
 

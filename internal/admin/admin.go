@@ -87,6 +87,7 @@ func (s *Server) Handler() http.Handler {
 	page("POST /kids/{id}/reset", s.kidAction)
 	page("POST /requests/{id}/approve", s.requestDecide)
 	page("POST /requests/{id}/deny", s.requestDecide)
+	page("POST /findings/dismiss", s.findingDismiss)
 	page("GET /kids", s.kidsPage)
 	page("POST /kids", s.kidCreate)
 	page("GET /kids/{id}", s.kidPage)

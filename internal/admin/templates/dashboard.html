@@ -50,6 +50,27 @@
 {{end}}
 </div>
 
+{{with .D.Findings}}
+<section class="card">
+  <h2>Other browsers &amp; video apps <span class="pill bad">{{len .}}</span></h2>
+  <p class="muted small">YTGuard only controls Chrome. These could be used to watch YouTube without limits. YTGuard can't remove them —
+    see “Other browsers” in the README for how. Dismiss anything you're fine with.</p>
+  <table class="list">
+    <tr><th>Who</th><th>App</th><th>What</th><th>Where</th><th>Seen</th><th></th></tr>
+    {{range .}}
+    <tr>
+      <td>{{.Kid}}</td>
+      <td><b>{{.App}}</b></td>
+      <td>{{if .Running}}<span class="pill bad">running now</span><br>{{else if eq .Kind "running"}}was running ·{{end}} <span class="muted small">{{.How}}</span></td>
+      <td><code class="small">{{.Location}}</code></td>
+      <td class="small">{{datetime .FirstSeen}}{{if ne .FirstSeen .LastSeen}} – {{clock .LastSeen}}{{end}}</td>
+      <td><form method="post" action="/findings/dismiss"><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="key" value="{{.Key}}"><button class="ghost small">Dismiss</button></form></td>
+    </tr>
+    {{end}}
+  </table>
+</section>
+{{end}}
+
 <section class="card">
   <h2>Requests {{if .D.Pending}}<span class="pill warn">{{len .D.Pending}}</span>{{end}}</h2>
   {{if not .D.Pending}}<p class="muted">No pending requests. When a kid hits a blocked video they can ask for it here.</p>{{end}}

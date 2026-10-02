@@ -70,7 +70,7 @@ Options: `--admin-addr :8443`, `--youtube-restrict 1|2` (also force YouTube Rest
 
 Then have each kid fully quit and reopen Chrome, and check `chrome://policy` and `chrome://extensions`.
 
-**Other browsers:** this only controls Chrome. Remove or restrict Firefox and other browsers for kid accounts, e.g.:
+**Other browsers:** this only controls Chrome. YTGuard reports other browsers it finds (see [Other browsers and video apps](#other-browsers-and-video-apps)). Remove or restrict them for kid accounts, e.g. Mint's built-in Firefox:
 
 ```bash
 sudo groupadd browser-adults && sudo usermod -aG browser-adults $USER
@@ -137,6 +137,35 @@ A video is known to be a Short once it has appeared anywhere as a Short. Opening
 
 Time counts only while a video is actually playing. Breaks: after *N* minutes of watching, YouTube pauses for *M* minutes with a countdown. Pausing for *M* minutes on their own also counts as a break. Allowed hours and the daily limit both apply; the kid sees a "time left · break in" badge.
 
+### Other browsers and video apps
+
+YTGuard can't control other browsers, but it looks for them so you know. It's on by default; turn it off under Settings.
+
+- **Every minute** the daemon checks the kids' running programs for any browser or YouTube app other than the managed Chrome: Firefox, Tor Browser, Brave, Chromium and unmanaged Chrome copies, AppImages, Flatpaks, FreeTube, yt-dlp, mpv and others.
+- **Every hour** a root job (`ytguard-scan.timer`) looks for installed ones:
+  - portable browsers, browser downloads and AppImages in kids' home folders;
+  - Flatpaks installed by a kid (possible without sudo on Mint: `flatpak install --user`);
+  - browsers installed for everyone that kids are allowed to run.
+
+  Run it now with `sudo ytguard scan`.
+- Findings appear on the dashboard (with a **Dismiss** button for anything you're fine with), in the daily report, and as a one-time `unapproved_app` Home Assistant event.
+
+To deal with what it finds:
+
+```bash
+sudo -u KID flatpak uninstall --user org.mozilla.firefox
+```
+
+```bash
+sudo rm -rf /home/KID/Downloads/firefox
+```
+
+```bash
+sudo dpkg-statoverride --update --add root browser-adults 0750 /usr/lib/firefox/firefox
+```
+
+The first removes a Flatpak a kid installed, the second deletes a portable copy, and the third makes Mint's Firefox usable only by members of the `browser-adults` group (see Install). To stop kids running programs from their home folders at all, mount `/home` with `noexec`. Detection goes by program names, so a renamed browser can slip through.
+
 ### Reports
 
 Sent daily at the configured time (default 20:30). If the PC is off then, the report goes out at the next start. Email works with any SMTP server. For Gmail, use an app password with `smtp.gmail.com:587` and STARTTLS. Home Assistant receives it as a webhook event. See [docs/home-assistant.md](docs/home-assistant.md).
@@ -176,6 +205,7 @@ Known limits:
 ```
 sudo ytguard install [--admin-addr :8443] [--youtube-restrict 0|1|2] [--allow-extensions]
 sudo ytguard upgrade [--check] [--file PATH] [-y]
+sudo ytguard scan
 sudo ytguard uninstall [--purge]
 sudo ytguard passwd
 ytguard serve [--data DIR] [--admin-addr ADDR] [--admin-http] [--trust-proxy] [--dev]
@@ -225,6 +255,7 @@ internal/notify/      SMTP + Home Assistant webhook
 internal/store/       SQLite
 internal/install/     installer, upgrade, Chrome policy, systemd unit, certificates
 internal/update/      GitHub release check + verified download
+internal/appscan/     detection of other browsers / video apps
 extension/            Chrome MV3 extension (packed and signed by the daemon at start)
 ```
 

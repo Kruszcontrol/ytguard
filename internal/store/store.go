@@ -113,8 +113,15 @@ func Open(dir string) (*Store, error) {
 // database from version i+1 to i+2. Never edit a released migration; add a
 // new one at the end.
 var migrations = []func(tx *sql.Tx) error{
-	// Example:
-	// func(tx *sql.Tx) error { _, err := tx.Exec(`ALTER TABLE kids ADD COLUMN x TEXT NOT NULL DEFAULT ''`); return err },
+	// 2: other browsers / video apps found on the PC.
+	func(tx *sql.Tx) error {
+		_, err := tx.Exec(`CREATE TABLE findings (
+			key TEXT PRIMARY KEY, kind TEXT NOT NULL, uid INTEGER NOT NULL, app TEXT NOT NULL,
+			location TEXT NOT NULL, how TEXT NOT NULL DEFAULT '',
+			first_seen INTEGER NOT NULL, last_seen INTEGER NOT NULL,
+			notified INTEGER NOT NULL DEFAULT 0, dismissed INTEGER NOT NULL DEFAULT 0)`)
+		return err
+	},
 }
 
 // SchemaVersion is the schema version this build expects.
@@ -128,6 +135,7 @@ func migrate(db *sql.DB, dir string) error {
 	if err := db.QueryRow(`PRAGMA user_version`).Scan(&ver); err != nil {
 		return err
 	}
+	fresh := ver == 0
 	if ver == 0 {
 		// Fresh database, or one from before versioning (same schema).
 		if _, err := db.Exec(schema); err != nil {
@@ -144,9 +152,12 @@ func migrate(db *sql.DB, dir string) error {
 	if ver == SchemaVersion() {
 		return nil
 	}
-	backup := filepath.Join(dir, fmt.Sprintf("ytguard.db.backup-schema%d-%s", ver, time.Now().Format("20060102-150405")))
-	if _, err := db.Exec(`VACUUM INTO ?`, backup); err != nil {
-		return fmt.Errorf("backup before migration: %w", err)
+	backup := "(none: new database)"
+	if !fresh {
+		backup = filepath.Join(dir, fmt.Sprintf("ytguard.db.backup-schema%d-%s", ver, time.Now().Format("20060102-150405")))
+		if _, err := db.Exec(`VACUUM INTO ?`, backup); err != nil {
+			return fmt.Errorf("backup before migration: %w", err)
+		}
 	}
 	for ; ver < SchemaVersion(); ver++ {
 		tx, err := db.Begin()
@@ -197,12 +208,13 @@ type Settings struct {
 	SessionDays    int    `json:"sessionDays"`
 	PCName         string `json:"pcName"`
 	UpdateCheck    bool   `json:"updateCheck"` // check GitHub for new releases
+	AppScan        bool   `json:"appScan"`     // look for other browsers / video apps
 }
 
 // DefaultSettings for a fresh install.
 func DefaultSettings() Settings {
 	host, _ := os.Hostname()
-	return Settings{ReportTime: "20:30", SMTPPort: 587, SMTPTLS: "starttls", UnmappedPolicy: "allow", SessionDays: 90, PCName: host, HAEvents: true, UpdateCheck: true}
+	return Settings{ReportTime: "20:30", SMTPPort: 587, SMTPTLS: "starttls", UnmappedPolicy: "allow", SessionDays: 90, PCName: host, HAEvents: true, UpdateCheck: true, AppScan: true}
 }
 
 // Settings returns the global settings.
@@ -870,6 +882,66 @@ func (s *Store) ReportSent(kidID int64, day string) bool {
 func (s *Store) MarkReportSent(kidID int64, day string) error {
 	_, err := s.DB.Exec(`INSERT OR REPLACE INTO reports_sent(kid_id, day, sent_at) VALUES(?,?,?)`, kidID, day, now())
 	return err
+}
+
+// ---- other browsers / apps ----
+
+// Finding is a browser or video app other than the managed Chrome.
+type Finding struct {
+	Key       string `json:"key"`
+	Kind      string `json:"kind"` // running | installed
+	UID       int    `json:"uid"`  // -1 = everyone
+	App       string `json:"app"`
+	Location  string `json:"location"`
+	How       string `json:"how"`
+	FirstSeen int64  `json:"firstSeen"`
+	LastSeen  int64  `json:"lastSeen"`
+	Notified  bool   `json:"notified"`
+	Dismissed bool   `json:"dismissed"`
+}
+
+// UpsertFinding records a sighting.
+func (s *Store) UpsertFinding(f Finding, ts int64) error {
+	_, err := s.DB.Exec(`INSERT INTO findings(key, kind, uid, app, location, how, first_seen, last_seen) VALUES(?,?,?,?,?,?,?,?)
+		ON CONFLICT(key) DO UPDATE SET last_seen=excluded.last_seen, app=excluded.app, how=excluded.how`,
+		f.Key, f.Kind, f.UID, f.App, f.Location, f.How, ts, ts)
+	return err
+}
+
+// Findings lists findings seen after since, newest first.
+func (s *Store) Findings(since int64, includeDismissed bool) ([]Finding, error) {
+	q := `SELECT key, kind, uid, app, location, how, first_seen, last_seen, notified, dismissed FROM findings WHERE last_seen>?`
+	if !includeDismissed {
+		q += ` AND dismissed=0`
+	}
+	rows, err := s.DB.Query(q+` ORDER BY last_seen DESC`, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Finding
+	for rows.Next() {
+		var f Finding
+		if err := rows.Scan(&f.Key, &f.Kind, &f.UID, &f.App, &f.Location, &f.How, &f.FirstSeen, &f.LastSeen, &f.Notified, &f.Dismissed); err != nil {
+			return nil, err
+		}
+		out = append(out, f)
+	}
+	return out, rows.Err()
+}
+
+// SetFindingFlags marks a finding notified and/or dismissed.
+func (s *Store) SetFindingFlags(key string, notified, dismissed *bool) error {
+	if notified != nil {
+		if _, err := s.DB.Exec(`UPDATE findings SET notified=? WHERE key=?`, *notified, key); err != nil {
+			return err
+		}
+	}
+	if dismissed != nil {
+		_, err := s.DB.Exec(`UPDATE findings SET dismissed=? WHERE key=?`, *dismissed, key)
+		return err
+	}
+	return nil
 }
 
 // ---- audit ----

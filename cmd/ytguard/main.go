@@ -37,6 +37,7 @@ Usage:
                                   install the latest release (or a local build)
   sudo ytguard uninstall [--purge]
   sudo ytguard passwd             reset the parent login (signs out all devices)
+  sudo ytguard scan               look for other browsers / video apps now (runs hourly)
   ytguard serve [flags]           run the daemon (systemd does this)
   ytguard report --kid NAME [--day YYYY-MM-DD] [--send] [--html]
   ytguard policy                  print the Chrome policy JSON
@@ -69,6 +70,12 @@ func main() {
 		purge := fs.Bool("purge", false, "also delete all data and the service user")
 		fs.Parse(args)
 		err = install.Uninstall(*purge)
+	case "scan":
+		fs := flag.NewFlagSet("scan", flag.ExitOnError)
+		data := fs.String("data", install.DataDir, "data directory")
+		quiet := fs.Bool("quiet", false, "don't print findings")
+		fs.Parse(args)
+		err = install.Scan(*data, !*quiet)
 	case "passwd":
 		err = passwd(args)
 	case "report":
@@ -261,6 +268,7 @@ func serve(args []string) error {
 	sched := &report.Scheduler{St: st, Now: time.Now}
 	go sched.Run(ctx)
 	go app.Updates.Run(ctx)
+	go app.RunAppMonitor(ctx, "/proc")
 	slog.Info("ytguard starting", "version", ytguard.Version, "repo", ytguard.Repo, "schema", store.SchemaVersion())
 	go func() {
 		t := time.NewTicker(6 * time.Hour)

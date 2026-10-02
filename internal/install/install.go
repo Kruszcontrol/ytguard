@@ -25,6 +25,8 @@ const (
 	BinPath     = "/usr/local/bin/ytguard"
 	DataDir     = "/var/lib/ytguard"
 	UnitPath    = "/etc/systemd/system/ytguard.service"
+	ScanService = "/etc/systemd/system/ytguard-scan.service"
+	ScanTimer   = "/etc/systemd/system/ytguard-scan.timer"
 	ServiceUser = "ytguard"
 	ExtAddr     = "127.0.0.1:7878" // must match extension/background.js
 
@@ -297,10 +299,20 @@ func Install(opt Options) error {
 	if err := os.WriteFile(UnitPath, []byte(Unit(opt.AdminAddr)), 0o644); err != nil {
 		return err
 	}
+	svc, tmr := ScanUnits()
+	if err := os.WriteFile(ScanService, []byte(svc), 0o644); err != nil {
+		return err
+	}
+	if err := os.WriteFile(ScanTimer, []byte(tmr), 0o644); err != nil {
+		return err
+	}
 	if err := run("systemctl", "daemon-reload"); err != nil {
 		return err
 	}
 	if err := run("systemctl", "enable", "ytguard.service"); err != nil {
+		return err
+	}
+	if err := run("systemctl", "enable", "--now", "ytguard-scan.timer"); err != nil {
 		return err
 	}
 	if err := run("systemctl", "restart", "ytguard.service"); err != nil {
@@ -530,8 +542,10 @@ func Uninstall(purge bool) error {
 	if os.Geteuid() != 0 {
 		return errors.New("run with sudo")
 	}
-	_ = run("systemctl", "disable", "--now", "ytguard.service")
+	_ = run("systemctl", "disable", "--now", "ytguard.service", "ytguard-scan.timer")
 	_ = os.Remove(UnitPath)
+	_ = os.Remove(ScanService)
+	_ = os.Remove(ScanTimer)
 	_ = run("systemctl", "daemon-reload")
 	for _, dir := range PolicyDirs {
 		_ = os.Remove(filepath.Join(dir, policyName))

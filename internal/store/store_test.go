@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -38,11 +39,11 @@ func TestMigrations(t *testing.T) {
 	files, _ := os.ReadDir(dir)
 	backups := 0
 	for _, f := range files {
-		if strings.HasPrefix(f.Name(), "ytguard.db.backup-schema1-") {
+		if strings.HasPrefix(f.Name(), fmt.Sprintf("ytguard.db.backup-schema%d-", SchemaVersion()-1)) {
 			backups++
 		}
 	}
-	if backups != 1 {
+	if backups != 1 || len(files) == 0 {
 		t.Fatalf("want 1 backup, have %d", backups)
 	}
 
