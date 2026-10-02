@@ -1,0 +1,36 @@
+# Push a tag like v1.2.0 to publish a release with Linux binaries.
+# Tags with a suffix (v1.2.0-rc1) are published as pre-releases, which
+# installed copies don't offer as updates.
+name: release
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go vet ./... && go test ./...
+      - name: Build
+        run: |
+          mkdir dist
+          for arch in amd64 arm64; do
+            CGO_ENABLED=0 GOOS=linux GOARCH=$arch go build -trimpath \
+              -ldflags "-s -w -X ytguard.Version=${GITHUB_REF_NAME} -X ytguard.Repo=${GITHUB_REPOSITORY}" \
+              -o dist/ytguard-linux-$arch ./cmd/ytguard
+          done
+          (cd dist && sha256sum ytguard-linux-* > SHA256SUMS && cat SHA256SUMS)
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          flags="--generate-notes --verify-tag"
+          case "$GITHUB_REF_NAME" in *-*) flags="$flags --prerelease";; esac
+          gh release create "$GITHUB_REF_NAME" dist/* $flags

@@ -1,0 +1,62 @@
+{{define "content"}}
+{{$k := .D.Kid}}
+<h1>{{$k.Name}} <span class="muted small">Linux user <code>{{$k.LinuxUser}}</code></span></h1>
+<form method="post" action="/kids/{{$k.ID}}" class="stack">
+<input type="hidden" name="csrf" value="{{.CSRF}}">
+<div class="card">
+  <label>Name <input name="name" value="{{$k.Name}}" maxlength="40"></label>
+</div>
+<div class="card">
+  <h2>Defaults for videos no rule mentions</h2>
+  <div class="two">
+    <fieldset>
+      <legend>Hide tier (does it show up at all?)</legend>
+      <label class="check"><input type="radio" name="hide_default" value="allow" {{if ne $k.HideDefault "deny"}}checked{{end}}> Show unknown videos</label>
+      <label class="check"><input type="radio" name="hide_default" value="deny" {{if eq $k.HideDefault "deny"}}checked{{end}}> Hide unknown videos <small class="muted">(only Hide-tier Allow entries ever appear)</small></label>
+    </fieldset>
+    <fieldset>
+      <legend>Block tier (can it play?)</legend>
+      <label class="check"><input type="radio" name="block_default" value="allow" {{if ne $k.BlockDefault "deny"}}checked{{end}}> Play unknown videos</label>
+      <label class="check"><input type="radio" name="block_default" value="deny" {{if eq $k.BlockDefault "deny"}}checked{{end}}> Block unknown videos <small class="muted">(kid must ask; you approve)</small></label>
+    </fieldset>
+  </div>
+</div>
+<div class="card">
+  <h2>Shorts</h2>
+  <p class="muted small">Overrides every filter rule and approval.</p>
+  {{$sm := $k.Options.ShortsMode}}
+  <label class="check"><input type="radio" name="shorts" value="filter" {{if eq $sm "filter"}}checked{{end}}> Follow the filters <small class="muted">(like any other video)</small></label>
+  <label class="check"><input type="radio" name="shorts" value="block" {{if eq $sm "block"}}checked{{end}}> Block all Shorts <small class="muted">(still listed with a lock, never play, can't ask)</small></label>
+  <label class="check"><input type="radio" name="shorts" value="hide" {{if eq $sm "hide"}}checked{{end}}> Hide all Shorts <small class="muted">(removed everywhere: shelves, Shorts tab, search, direct links)</small></label>
+</div>
+<div class="card">
+  <h2>YouTube page options</h2>
+  <label class="check"><input type="checkbox" name="hide_comments" {{if $k.Options.HideComments}}checked{{end}}> Hide comments</label>
+  <label class="check"><input type="checkbox" name="disable_autoplay" {{if $k.Options.DisableAutoplay}}checked{{end}}> Turn off autoplay</label>
+</div>
+<div class="card">
+  <h2>Time</h2>
+  <p class="muted small">Daily minutes: blank = unlimited, 0 = none. Hours: e.g. <code>07:00-08:00, 15:30-20:00</code>, blank = any time.
+  Breaks: after N minutes of watching, YouTube pauses for M minutes (a pause of M minutes on their own also counts as a break).</p>
+  <div class="scroll">
+  <table class="sched">
+    <tr><th>Day</th><th>Daily minutes</th><th>Allowed hours</th><th>Break every (min)</th><th>Break length (min)</th></tr>
+    {{range $i, $r := .D.Rows}}
+    <tr>
+      <td>{{weekday $r.Weekday}}</td>
+      <td><input name="{{$r.Weekday}}_daily" type="number" min="0" max="1440" value="{{if ge $r.Sched.DailyMinutes 0}}{{$r.Sched.DailyMinutes}}{{end}}" placeholder="∞"></td>
+      <td><input name="{{$r.Weekday}}_windows" value="{{$r.Windows}}" placeholder="any time"></td>
+      <td><input name="{{$r.Weekday}}_break_after" type="number" min="0" max="600" value="{{if $r.Sched.BreakAfter}}{{$r.Sched.BreakAfter}}{{end}}" placeholder="off"></td>
+      <td><input name="{{$r.Weekday}}_break_len" type="number" min="0" max="600" value="{{if $r.Sched.BreakLen}}{{$r.Sched.BreakLen}}{{end}}" placeholder="off"></td>
+    </tr>
+    {{end}}
+  </table>
+  </div>
+  <p><button type="button" data-copy-first-row>Copy Monday to all days</button> <button type="button" data-copy-weekdays>Copy Monday to Tue–Fri</button></p>
+</div>
+<p><button class="primary">Save</button></p>
+</form>
+<form method="post" action="/kids/{{$k.ID}}/delete" data-confirm="Remove {{$k.Name}} and all their history and kid-specific rules?">
+  <input type="hidden" name="csrf" value="{{.CSRF}}"><button class="danger">Remove {{$k.Name}}</button>
+</form>
+{{end}}

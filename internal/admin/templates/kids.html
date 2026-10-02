@@ -1,0 +1,29 @@
+{{define "content"}}
+<h1>Kids</h1>
+<p class="muted">Each kid is matched to their Linux login on this PC. Other Linux users (parents) are not filtered unless you change that in Settings.</p>
+<div class="card">
+  <table class="list">
+    <tr><th>Name</th><th>Linux user</th><th>Hide default</th><th>Block default</th><th>Shorts</th><th></th></tr>
+    {{range .Kids}}
+    <tr><td><a href="/kids/{{.ID}}">{{.Name}}</a></td><td><code>{{.LinuxUser}}</code></td>
+      <td>{{if eq .HideDefault "deny"}}hide unknown{{else}}show unknown{{end}}</td>
+      <td>{{if eq .BlockDefault "deny"}}block unknown{{else}}play unknown{{end}}</td>
+      <td>{{with .Options.ShortsMode}}{{if eq . "filter"}}follow filters{{else}}{{.}} all{{end}}{{end}}</td>
+      <td><a href="/kids/{{.ID}}">Edit</a></td></tr>
+    {{else}}<tr><td colspan="6" class="muted">No kids yet.</td></tr>{{end}}
+  </table>
+</div>
+<div class="card">
+  <h2>Add a kid</h2>
+  <form method="post" action="/kids" class="row wrap">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <label>Linux user
+      <select name="linux_user" required>
+        {{range .D.FreeUsers}}<option>{{.}}</option>{{else}}<option value="">(no unassigned users)</option>{{end}}
+      </select>
+    </label>
+    <label>Name <input name="name" required maxlength="40"></label>
+    <button class="primary">Add</button>
+  </form>
+</div>
+{{end}}

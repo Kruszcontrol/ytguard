@@ -1,0 +1,35 @@
+{{define "content"}}
+<h1>Rule tester</h1>
+<form method="get" action="/tester" class="card row wrap">
+  <input name="url" value="{{.D.URL}}" placeholder="Paste a YouTube video link" class="grow" required autofocus>
+  <button class="primary">Test</button>
+</form>
+{{with .D.Error}}<div class="flash err">{{.}}</div>{{end}}
+{{with .D.Meta}}{{if .VideoID}}
+<div class="card">
+  <a class="video" href="{{watch .VideoID}}" target="_blank" rel="noopener">
+    <img src="{{thumb .VideoID}}" alt="">
+    <span><b>{{.Title}}</b><br><span class="muted small">{{.ChannelName}} {{.ChannelHandle}} · {{.Category}} · {{mins .LengthSeconds}}{{if .IsLive}} · live{{end}}</span>
+    {{if .Tags}}<br><span class="muted small">Tags: {{join .Tags ", "}}</span>{{end}}</span>
+  </a>
+  {{if $.D.Partial}}<p class="flash warn">Couldn't fetch full details for this video, so description/tag/category rules weren't checked.</p>{{end}}
+</div>
+{{end}}{{end}}
+{{range .D.Results}}
+<div class="card">
+  <div class="row between">
+    <h2>{{.Kid.Name}}</h2>
+    {{if eq .Decision.Outcome "hide"}}<span class="pill bad">Hidden</span>
+    {{else if eq .Decision.Outcome "block"}}<span class="pill warn">Shown, blocked</span>
+    {{else}}<span class="pill ok">Plays</span>{{end}}
+  </div>
+  <table class="list">
+    <tr><th>Tier</th><th>Verdict</th><th>Why</th></tr>
+    <tr><td>Hide</td><td><span class="tag {{.Decision.Hide.Verdict}}">{{.Decision.Hide.Verdict}}</span></td><td>{{.Decision.Hide.Reason}}</td></tr>
+    {{with .Decision.Block}}<tr><td>Block</td><td><span class="tag {{.Verdict}}">{{.Verdict}}</span></td><td>{{.Reason}}</td></tr>
+    {{else}}<tr><td>Block</td><td colspan="2" class="muted">Not checked — Hide tier already decided.</td></tr>{{end}}
+  </table>
+  {{if .Decision.Hide.Unchecked}}<p class="muted small">Couldn't check: {{join .Decision.Hide.Unchecked "; "}}</p>{{end}}
+</div>
+{{end}}
+{{end}}

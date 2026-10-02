@@ -1,0 +1,15 @@
+{{define "content"}}
+<div class="card narrow">
+  <h1>YTGuard{{if .PCName}} · {{.PCName}}{{end}}</h1>
+  <p class="muted">Parent login. These are YTGuard's own credentials, not a computer account.</p>
+  {{with .D.Error}}<div class="flash err">{{.}}</div>{{end}}
+  <form method="post" action="/login" class="stack">
+    <input type="hidden" name="next" value="{{.D.Next}}">
+    <label>Username <input name="username" autocomplete="username" required autofocus value="{{.D.Username}}"></label>
+    <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
+    <label class="check"><input type="checkbox" name="remember" checked> Remember this device</label>
+    <label>Device name <input name="device" value="{{.D.Device}}" maxlength="60"><small class="muted">Shown in Security → Devices so you can sign it out later.</small></label>
+    <button class="primary">Log in</button>
+  </form>
+</div>
+{{end}}

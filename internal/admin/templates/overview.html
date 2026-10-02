@@ -1,0 +1,39 @@
+{{define "content"}}
+{{$kids := .Kids}}
+<h1>Filters</h1>
+<div class="tabs">
+  <a href="/filters?tier=hide&scope={{.D.Scope}}">Hide <small>never shown</small></a>
+  <a href="/filters?tier=block&scope={{.D.Scope}}">Block <small>shown, needs OK to play</small></a>
+  <a href="/filters/overview?scope={{.D.Scope}}" class="on">Overview</a>
+</div>
+<form class="row wrap card filterbar" method="get" action="/filters/overview">
+  <label>Show rules for
+    <select name="scope" data-autosubmit>
+      <option value="" {{if eq .D.Scope ""}}selected{{end}}>Everyone (all scopes)</option>
+      <option value="all" {{if eq .D.Scope "all"}}selected{{end}}>“All kids” rules only</option>
+      {{range $kids}}<option value="{{.ID}}" {{if eq $.D.Scope (printf "%d" .ID)}}selected{{end}}>{{.Name}} only</option>{{end}}
+    </select>
+  </label>
+  <label>Search <input name="q" value="{{.D.Q}}"></label>
+  <button>Filter</button>
+</form>
+<div class="card scroll">
+<p class="muted small">Every filter entry with its setting in both tiers. “Effect” is what this entry alone does; more specific rules (video over channel over keyword…) still win.</p>
+<table class="list">
+  <tr><th>Type</th><th>Entry</th><th>For</th><th>Hide tier</th><th>Block tier</th><th>Effect</th></tr>
+  {{range .D.Rows}}
+  <tr>
+    <td>{{.Type}}</td>
+    <td>{{if eq .Type "video"}}<a href="{{watch .Value}}" target="_blank" rel="noopener">{{if .Label}}{{.Label}}{{else}}{{.Value}}{{end}}</a>
+        {{else if eq .Type "channel"}}<a href="{{chanURL .Value}}" target="_blank" rel="noopener">{{if .Label}}{{.Label}}{{else}}{{.Value}}{{end}}</a> <span class="muted small">{{.Extra}}</span>
+        {{else if eq .Type "attribute"}}{{attr .Value}}
+        {{else}}<code>{{.Value}}</code>{{end}}</td>
+    <td><span class="chip">{{kidName $kids .KidID}}</span></td>
+    <td>{{with .Hide}}<span class="tag {{.List}}">{{.List}}</span>{{else}}<span class="muted">—</span>{{end}}</td>
+    <td>{{with .Block}}<span class="tag {{.List}}">{{.List}}</span>{{else}}<span class="muted">—</span>{{end}}</td>
+    <td>{{.Effect}}</td>
+  </tr>
+  {{else}}<tr><td colspan="6" class="muted">No filter entries.</td></tr>{{end}}
+</table>
+</div>
+{{end}}

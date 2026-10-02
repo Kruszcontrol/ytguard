@@ -1,0 +1,9 @@
+{
+  "name": "YTGuard",
+  "short_name": "YTGuard",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f4f5",
+  "theme_color": "#2563eb",
+  "icons": [{ "src": "/static/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

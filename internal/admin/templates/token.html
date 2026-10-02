@@ -1,0 +1,11 @@
+{{define "content"}}
+<h1>API token created</h1>
+<div class="card">
+  <p>Token <b>{{.D.Name}}</b>. Copy it now — it won't be shown again.</p>
+  <p><input readonly value="{{.D.Token}}" class="mono grow" data-select></p>
+  <p class="muted small">Use it as <code>Authorization: Bearer &lt;token&gt;</code>. Test from a terminal:</p>
+  <pre>curl -k -H "Authorization: Bearer {{.D.Token}}" {{.D.Base}}/api/v1/state</pre>
+  <p class="muted small">For Home Assistant, put it in <code>secrets.yaml</code> and follow docs/home-assistant.md.</p>
+  <p><a class="button" href="/security">Done</a></p>
+</div>
+{{end}}

@@ -1,0 +1,55 @@
+/* Injected at document_start, before YouTube renders anything. */
+
+/* Every video tile stays invisible until ytguard says it may be shown. */
+html:not([ytg-off]) :is(
+  ytd-rich-item-renderer, ytd-video-renderer, ytd-compact-video-renderer, ytd-grid-video-renderer,
+  ytd-playlist-video-renderer, ytd-playlist-panel-video-renderer, ytd-reel-item-renderer,
+  ytd-compact-radio-renderer, ytd-radio-renderer, ytd-playlist-renderer, ytd-compact-playlist-renderer,
+  ytd-movie-renderer, ytd-compact-movie-renderer, ytd-watch-card-compact-video-renderer,
+  ytd-watch-card-hero-video-renderer, ytd-watch-card-rich-header-renderer,
+  yt-lockup-view-model, ytm-shorts-lockup-view-model, ytm-shorts-lockup-view-model-v2,
+  ytm-video-with-context-renderer, ytm-compact-video-renderer, ytm-reel-item-renderer, ytm-media-item
+):not([ytg-ok]) {
+  visibility: hidden !important;
+}
+html:not([ytg-off]) [ytg-hide] { display: none !important; }
+/* Collapse grid cells whose only content is a hidden tile. */
+html:not([ytg-off]) :is(.ytGridShelfViewModelGridShelfItem, ytd-rich-item-renderer):has([ytg-hide]) { display: none !important; }
+
+/* Recommendation surfaces inside the player can't be filtered per video. */
+html:not([ytg-off]) :is(
+  .ytp-ce-element, .ytp-endscreen-content, .ytp-videowall-still, .ytp-autonav-endscreen-countdown-overlay,
+  .ytp-pause-overlay, .ytp-fullscreen-grid, .ytp-fullscreen-grid-stills-container, .ytp-suggested-action,
+  .ytp-modern-videowall-still, .html5-endscreen
+) {
+  display: none !important;
+}
+
+/* Blocked (but visible) videos get a lock. */
+[ytg-locked] { position: relative !important; }
+[ytg-locked]::after {
+  content: "🔒 Ask a parent";
+  position: absolute; top: 8px; left: 8px; z-index: 5;
+  padding: 3px 8px; border-radius: 6px;
+  background: rgba(0, 0, 0, .78); color: #fff;
+  font: 600 12px/1.4 Roboto, Arial, sans-serif;
+  pointer-events: none;
+}
+[ytg-locked] :is(img, yt-image, ytd-thumbnail, yt-thumbnail-view-model) { filter: grayscale(.8) brightness(.8); }
+
+/* Per-kid options. */
+html[ytg-nocomments] :is(ytd-comments, #comments, ytm-comment-section-renderer, ytd-comments-entry-point-header-renderer) {
+  display: none !important;
+}
+html[ytg-noshorts] :is(
+  ytd-reel-shelf-renderer, ytd-rich-shelf-renderer[is-shorts], grid-shelf-view-model,
+  ytd-guide-entry-renderer:has(a[title="Shorts"]), ytd-mini-guide-entry-renderer:has(a[title="Shorts"]),
+  ytd-pivot-bar-item-renderer:has([title="Shorts"]), [ytg-shorts-ui],
+  ytd-rich-section-renderer:has(ytd-rich-shelf-renderer[is-shorts]), ytm-shorts-lockup-view-model,
+  ytm-shorts-lockup-view-model-v2, yt-chip-cloud-chip-renderer:has([title="Shorts"])
+) {
+  display: none !important;
+}
+
+/* While a video page is being checked, nothing from it shows. */
+html[ytg-cover] body { overflow: hidden !important; }

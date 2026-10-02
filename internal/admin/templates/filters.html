@@ -1,0 +1,101 @@
+{{define "content"}}
+{{$tier := .D.Tier}}{{$csrf := .CSRF}}{{$kids := .Kids}}
+<h1>Filters</h1>
+<div class="tabs">
+  <a href="/filters?tier=hide&scope={{.D.Scope}}" class="{{if eq $tier "hide"}}on{{end}}">Hide <small>never shown</small></a>
+  <a href="/filters?tier=block&scope={{.D.Scope}}" class="{{if eq $tier "block"}}on{{end}}">Block <small>shown, needs OK to play</small></a>
+  <a href="/filters/overview?scope={{.D.Scope}}">Overview</a>
+</div>
+<details class="card help">
+  <summary>How filtering decides</summary>
+  <ol>
+    <li><b>Hide</b> is checked first. If a Hide <i>Deny</i> rule wins, the video never appears: no title or thumbnail anywhere, and a direct link shows “not available”.</li>
+    <li>Otherwise <b>Block</b> decides. If a Block <i>Deny</i> rule wins, the video shows in lists with a lock and the kid can ask you for it. Otherwise it plays.</li>
+    <li>Within a tier, the most specific rule type wins: <b>Video → Channel → Keyword → Category → Attribute → kid's default</b>.
+      At each step, rules for a specific kid beat rules for all kids, and Deny beats Allow.</li>
+  </ol>
+  <p class="muted small">Examples: Block-Allow keyword “minecraft” + Hide-Deny keyword “creepy” → “Creepy Minecraft” is hidden. Hide-Allow a video + Block-Deny the same video → it shows up but needs your OK.</p>
+</details>
+<form class="row wrap card filterbar" method="get" action="/filters">
+  <input type="hidden" name="tier" value="{{$tier}}">
+  <label>Show rules for
+    <select name="scope" data-autosubmit>
+      <option value="" {{if eq .D.Scope ""}}selected{{end}}>Everyone (all scopes)</option>
+      <option value="all" {{if eq .D.Scope "all"}}selected{{end}}>“All kids” rules only</option>
+      {{range $kids}}<option value="{{.ID}}" {{if eq $.D.Scope (printf "%d" .ID)}}selected{{end}}>{{.Name}} only</option>{{end}}
+    </select>
+  </label>
+  <label>Search <input name="q" value="{{.D.Q}}" placeholder="title, channel, keyword…"></label>
+  <button>Filter</button>
+</form>
+
+{{range .D.Sections}}
+{{$type := .Type}}{{$sec := .}}
+<section class="card">
+  <h2>{{.Title}}</h2>
+  <p class="muted small">{{.Help}}</p>
+  <div class="two">
+    {{range $list := list "allow" "deny"}}
+    <div class="col {{$list}}">
+      <h3>{{if eq $list "allow"}}Allow{{else}}Deny{{end}} <small class="muted">{{if eq $tier "hide"}}{{if eq $list "allow"}}always shown{{else}}hidden{{end}}{{else}}{{if eq $list "allow"}}plays{{else}}blocked{{end}}{{end}}</small></h3>
+      <ul class="rules">
+      {{range index $sec.Lists $list}}
+        <li>
+          <div>
+            {{if eq .Type "video"}}<a href="{{watch .Value}}" target="_blank" rel="noopener">{{if .Label}}{{.Label}}{{else}}{{.Value}}{{end}}</a>
+            {{else if eq .Type "channel"}}<a href="{{chanURL .Value}}" target="_blank" rel="noopener">{{if .Label}}{{.Label}}{{else}}{{.Value}}{{end}}</a>{{if .Extra}} <span class="muted small">{{.Extra}}</span>{{end}}
+            {{else if eq .Type "keyword"}}<code>{{.Value}}</code> <span class="muted small">{{.Match}} · {{join .Fields ", "}}</span>
+            {{else if eq .Type "attribute"}}{{attr .Value}}
+            {{else}}{{.Value}}{{end}}
+            <span class="chip">{{kidName $kids .KidID}}</span>
+            {{if .Note}}<div class="muted small">{{.Note}}</div>{{end}}
+          </div>
+          <div class="ruleactions">
+            <form method="post" action="/filters/{{.ID}}/move" class="inline">
+              <input type="hidden" name="csrf" value="{{$csrf}}">
+              <select name="to" data-autosubmit aria-label="Move">
+                <option value="">Move…</option>
+                {{range $t := list "hide" "block"}}{{range $l := list "allow" "deny"}}
+                {{if not (and (eq $t $tier) (eq $l $list))}}<option value="{{$t}}:{{$l}}">→ {{title $t}} {{$l}}</option>{{end}}
+                {{end}}{{end}}
+              </select>
+            </form>
+            <form method="post" action="/filters/{{.ID}}/delete" class="inline"><input type="hidden" name="csrf" value="{{$csrf}}"><button class="ghost small" title="Remove">✕</button></form>
+          </div>
+        </li>
+      {{else}}<li class="muted small">Nothing yet.</li>{{end}}
+      </ul>
+    </div>
+    {{end}}
+  </div>
+  <form method="post" action="/filters/add" class="row wrap addrule">
+    <input type="hidden" name="csrf" value="{{$csrf}}">
+    <input type="hidden" name="tier" value="{{$tier}}">
+    <input type="hidden" name="type" value="{{$type}}">
+    {{if eq $type "video"}}<input name="value" placeholder="Video link, e.g. https://youtu.be/…" required class="grow">
+    {{else if eq $type "channel"}}<input name="value" placeholder="Channel link, @handle, or a video from it" required class="grow">
+    {{else if eq $type "keyword"}}
+      <input name="value" placeholder="word or phrase" required class="grow">
+      <select name="match"><option value="word">whole word</option><option value="substring">anywhere</option><option value="regex">regex</option></select>
+      <span class="fields">{{range $.D.Fields}}<label class="check"><input type="checkbox" name="field_{{.}}" {{if eq . "title"}}checked{{end}}> {{.}}</label>{{end}}</span>
+    {{else if eq $type "category"}}
+      <select name="value" required><option value="">Category…</option>{{range $.D.Categories}}<option>{{.}}</option>{{end}}</select>
+    {{else if eq $type "attribute"}}
+      <select name="value" required data-attr>
+        <option value="">Attribute…</option>
+        <option value="shorts">Shorts</option>
+        <option value="live">Live streams</option>
+        <option value="longer_than">Longer than…</option>
+        <option value="not_family_safe">Not family safe (YouTube flag)</option>
+        <option value="not_made_for_kids">Not made for kids (needs API key)</option>
+      </select>
+      <input name="minutes" type="number" min="1" placeholder="minutes" class="short" data-attr-minutes hidden>
+    {{end}}
+    <select name="list"><option value="deny">Deny</option><option value="allow">Allow</option></select>
+    <select name="kid"><option value="all">All kids</option>{{range $kids}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select>
+    <input name="note" placeholder="note (optional)" class="short">
+    <button class="primary">Add to {{title $tier}}</button>
+  </form>
+</section>
+{{end}}
+{{end}}

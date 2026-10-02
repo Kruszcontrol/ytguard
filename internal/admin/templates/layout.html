@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#2563eb">
+<title>{{.Title}} · YTGuard{{if .PCName}} · {{.PCName}}{{end}}</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="manifest" href="/static/manifest.webmanifest">
+<link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+<script src="/static/app.js" defer></script>
+</head>
+<body>
+{{if .CSRF}}
+<header class="top">
+  <a class="brand" href="/">YTGuard{{if .PCName}} <span class="pc">{{.PCName}}</span>{{end}}</a>
+  <nav>
+    <a href="/" {{if eq .Active "dashboard"}}class="on"{{end}}>Dashboard</a>
+    <a href="/filters" {{if or (eq .Active "filters") (eq .Active "overview")}}class="on"{{end}}>Filters</a>
+    <a href="/history" {{if eq .Active "history"}}class="on"{{end}}>History</a>
+    <a href="/kids" {{if or (eq .Active "kids") (eq .Active "kid")}}class="on"{{end}}>Kids</a>
+    <a href="/tester" {{if eq .Active "tester"}}class="on"{{end}}>Tester</a>
+    <a href="/settings" {{if eq .Active "settings"}}class="on"{{end}}>Settings</a>
+    <a href="/security" {{if or (eq .Active "security") (eq .Active "token")}}class="on"{{end}}>Security</a>
+    <form method="post" action="/logout" class="inline"><input type="hidden" name="csrf" value="{{.CSRF}}"><button class="link">Log out</button></form>
+  </nav>
+</header>
+{{end}}
+<main{{if .CSRF}} data-csrf="{{.CSRF}}"{{end}}>
+{{if .Msg}}<div class="flash ok">{{.Msg}}</div>{{end}}
+{{if .Err}}<div class="flash err">{{.Err}}</div>{{end}}
+{{template "content" .}}
+</main>
+<footer>YTGuard {{.Version}}{{if .CSRF}}{{if .Update.Available}} · <a href="/settings#updates">{{.Update.Latest}} available</a>{{end}}{{end}}</footer>
+</body>
+</html>

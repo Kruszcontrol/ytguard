@@ -1,0 +1,55 @@
+{{define "content"}}
+{{$csrf := .CSRF}}{{$cur := .D.Current}}
+<h1>Security</h1>
+<div class="card">
+  <h2>Admin login</h2>
+  <p class="muted small">YTGuard's own username and password (not a computer account). Changing the password signs out every device. Forgot it? Run <code>sudo ytguard passwd</code> on this PC.</p>
+  <form method="post" action="/security/password" class="stack narrowform">
+    <input type="hidden" name="csrf" value="{{$csrf}}">
+    <label>Username <input name="username" value="{{.D.User}}" autocomplete="username"></label>
+    <label>Current password <input name="current" type="password" required autocomplete="current-password"></label>
+    <label>New password <input name="new" type="password" required minlength="10" autocomplete="new-password"></label>
+    <label>Confirm new password <input name="confirm" type="password" required minlength="10" autocomplete="new-password"></label>
+    <button class="primary">Change</button>
+  </form>
+</div>
+<div class="card scroll">
+  <h2>Signed-in devices</h2>
+  <table class="list">
+    <tr><th>Device</th><th>Last used</th><th>IP</th><th>Expires</th><th></th></tr>
+    {{range .D.Sessions}}
+    <tr>
+      <td><form method="post" action="/security/sessions/{{.ID}}/rename" class="row"><input type="hidden" name="csrf" value="{{$csrf}}"><input name="name" value="{{.Name}}" class="short"><button class="ghost small">Rename</button></form>
+        {{if eq .ID $cur}}<span class="chip">this device</span>{{end}}</td>
+      <td>{{datetime .LastUsed}}</td><td>{{.IP}}</td><td>{{datetime .ExpiresAt}}{{if not .Remember}} (session){{end}}</td>
+      <td><form method="post" action="/security/sessions/{{.ID}}/revoke"><input type="hidden" name="csrf" value="{{$csrf}}"><button class="ghost small">Sign out</button></form></td>
+    </tr>
+    {{end}}
+  </table>
+  <form method="post" action="/security/sessions/revoke-all" data-confirm="Sign out every device, including this one?"><input type="hidden" name="csrf" value="{{$csrf}}"><button class="danger">Sign out everywhere</button></form>
+</div>
+<div class="card scroll">
+  <h2>API tokens</h2>
+  <p class="muted small">For Home Assistant and scripts. Tokens can't log into this page. <b>read</b>: status sensors · <b>control</b>: bonus time, pause, approve/deny requests · <b>admin</b>: edit filters.</p>
+  <table class="list">
+    <tr><th>Name</th><th>Scopes</th><th>Created</th><th>Last used</th><th></th></tr>
+    {{range .D.Tokens}}
+    <tr><td>{{.Name}}</td><td>{{join .Scopes ", "}}</td><td>{{datetime .CreatedAt}}</td><td>{{datetime .LastUsed}}</td>
+      <td><form method="post" action="/security/tokens/{{.ID}}/revoke" data-confirm="Revoke token {{.Name}}?"><input type="hidden" name="csrf" value="{{$csrf}}"><button class="ghost small">Revoke</button></form></td></tr>
+    {{else}}<tr><td colspan="5" class="muted">No tokens.</td></tr>{{end}}
+  </table>
+  <form method="post" action="/security/tokens" class="row wrap">
+    <input type="hidden" name="csrf" value="{{$csrf}}">
+    <input name="name" placeholder="Home Assistant" required maxlength="40">
+    {{range .D.Scopes}}<label class="check"><input type="checkbox" name="scope" value="{{.}}" {{if ne . "admin"}}checked{{end}}> {{.}}</label>{{end}}
+    <button class="primary">Create token</button>
+  </form>
+</div>
+<div class="card scroll">
+  <h2>Activity log</h2>
+  <table class="list small">
+    <tr><th>When</th><th>Who</th><th>IP</th><th>What</th></tr>
+    {{range .D.Audit}}<tr><td>{{datetime .TS}}</td><td>{{.Actor}}</td><td>{{.IP}}</td><td>{{.Action}}{{if .Detail}} — {{.Detail}}{{end}}</td></tr>{{end}}
+  </table>
+</div>
+{{end}}

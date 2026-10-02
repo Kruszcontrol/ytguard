@@ -1,0 +1,99 @@
+{{define "content"}}
+{{$s := .D.S}}
+<h1>Settings</h1>
+<form method="post" action="/settings" class="stack">
+<input type="hidden" name="csrf" value="{{.CSRF}}">
+<div class="card">
+  <h2>This PC</h2>
+  <label>Name <input name="pc_name" value="{{$s.PCName}}" maxlength="40"></label>
+  <label>Public URL <input name="public_url" value="{{$s.PublicURL}}" placeholder="https://{{.D.Host}}"><small class="muted">How you reach this page from your phone. Used for links in reports and Home Assistant notifications.</small></label>
+  <label>Linux users that aren't kids
+    <select name="unmapped_policy">
+      <option value="allow" {{if ne $s.UnmappedPolicy "block"}}selected{{end}}>Unrestricted (parents, guests you trust)</option>
+      <option value="block" {{if eq $s.UnmappedPolicy "block"}}selected{{end}}>Block YouTube entirely</option>
+    </select>
+  </label>
+</div>
+<div class="card">
+  <h2>Daily report</h2>
+  <label>Send at <input name="report_time" value="{{$s.ReportTime}}" placeholder="20:30" class="short"><small class="muted">Local time. If the PC is off then, it's sent at next start-up. Videos watched after this time show up in the History page (and in the next catch-up only if the report wasn't sent yet).</small></label>
+  <fieldset>
+    <legend><label class="check"><input type="checkbox" name="report_email" {{if $s.ReportEmail}}checked{{end}}> Email</label></legend>
+    <div class="two">
+      <label>SMTP server <input name="smtp_host" value="{{$s.SMTPHost}}" placeholder="smtp.gmail.com"></label>
+      <label>Port <input name="smtp_port" type="number" value="{{$s.SMTPPort}}" class="short"></label>
+      <label>Security
+        <select name="smtp_tls">
+          <option value="starttls" {{if eq $s.SMTPTLS "starttls"}}selected{{end}}>STARTTLS (587)</option>
+          <option value="tls" {{if eq $s.SMTPTLS "tls"}}selected{{end}}>TLS (465)</option>
+          <option value="none" {{if eq $s.SMTPTLS "none"}}selected{{end}}>None (local relay only)</option>
+        </select>
+      </label>
+      <label>Username <input name="smtp_user" value="{{$s.SMTPUser}}" autocomplete="off"></label>
+      <label>Password <input name="smtp_pass" type="password" placeholder="{{if $s.SMTPPass}}(saved — leave blank to keep){{else}}app password{{end}}" autocomplete="new-password">
+        {{if $s.SMTPPass}}<span class="check small"><input type="checkbox" name="smtp_pass_clear"> clear</span>{{end}}</label>
+      <label>From <input name="smtp_from" value="{{$s.SMTPFrom}}" placeholder="YTGuard &lt;you@gmail.com&gt;"></label>
+      <label>To <input name="smtp_to" value="{{$s.SMTPTo}}" placeholder="you@example.com, partner@example.com"></label>
+    </div>
+    <p class="muted small">Gmail: turn on 2-step verification and create an “app password”; use smtp.gmail.com, port 587, STARTTLS.</p>
+  </fieldset>
+  <fieldset>
+    <legend><label class="check"><input type="checkbox" name="report_ha" {{if $s.ReportHA}}checked{{end}}> Home Assistant</label></legend>
+    <p class="muted small">Sends the report to the webhook below as a <code>daily_report</code> event.</p>
+  </fieldset>
+</div>
+<div class="card">
+  <h2>Home Assistant</h2>
+  <label>Webhook URL <input name="ha_webhook" placeholder="{{if $s.HAWebhookURL}}(saved — leave blank to keep){{else}}http://homeassistant.local:8123/api/webhook/ytguard-…{{end}}" autocomplete="off">
+    {{if $s.HAWebhookURL}}<span class="check small"><input type="checkbox" name="ha_webhook_clear"> clear</span>{{end}}</label>
+  <label class="check"><input type="checkbox" name="ha_events" {{if $s.HAEvents}}checked{{end}}> Send instant events: approval requests, time's up, parent logins</label>
+  <label class="check"><input type="checkbox" name="ha_insecure" {{if $s.HAInsecureTLS}}checked{{end}}> Home Assistant uses a self-signed HTTPS certificate (skip verification)</label>
+  <p class="muted small">For sensors and buttons in Home Assistant (time left, +15 min, approve requests) create an API token under Security. See docs/home-assistant.md.</p>
+  <label>Allow showing this UI inside these sites (iframe)
+    <input name="embed_origins" value="{{$s.EmbedOrigins}}" placeholder="https://homeassistant.local:8123">
+    <small class="muted">Space-separated. Leave empty unless you use a Home Assistant Webpage card. Some phone apps block logins inside iframes; a dashboard button that opens this page is more reliable.</small></label>
+</div>
+<div class="card">
+  <h2>YouTube Data API (optional)</h2>
+  <label>API key <input name="yt_key" placeholder="{{if $s.YouTubeAPIKey}}(saved — leave blank to keep){{else}}AIza…{{end}}" autocomplete="off">
+    {{if $s.YouTubeAPIKey}}<span class="check small"><input type="checkbox" name="yt_key_clear"> clear</span>{{end}}</label>
+  <p class="muted small">With a free key from Google Cloud Console (YouTube Data API v3), description, tag, category and made-for-kids rules also apply to thumbnails in feeds and search, not just when a video is opened.</p>
+</div>
+<div class="card" id="updates">
+  <h2>Updates</h2>
+  {{with $.Update}}
+  <label class="check"><input type="checkbox" name="update_check" {{if $s.UpdateCheck}}checked{{end}}> Check GitHub{{if .Repo}} (<code>{{.Repo}}</code>){{end}} for new versions twice a day</label>
+  <p class="muted small">This PC runs YTGuard <b>{{.Current}}</b>.
+    {{if not .Repo}}This build doesn't know its GitHub repository, so it can't check for updates.
+    {{else if .Error}}Last check failed: {{.Error}}.
+    {{else if .Available}}<b>{{.Latest}} is available</b>{{if .URL}} — <a href="{{.URL}}" target="_blank" rel="noopener">release notes</a>{{end}}. To install it, an adult runs <code>sudo ytguard upgrade</code> on this PC.
+    {{else if .Latest}}Up to date (latest release {{.Latest}}).{{end}}
+    {{if not .Checked.IsZero}}Checked {{.Checked.Format "Jan 2 15:04"}}.{{end}}
+    Updating never happens automatically. Only the version number is sent to GitHub, nothing about your family.</p>
+  {{end}}
+</div>
+<div class="card">
+  <h2>Logins</h2>
+  <label>“Remember this device” lasts <input name="session_days" type="number" min="1" max="400" value="{{$s.SessionDays}}" class="short"> days</label>
+</div>
+<p><button class="primary">Save settings</button></p>
+</form>
+<div class="card row wrap">
+  <form method="post" action="/settings/test-email" class="inline"><input type="hidden" name="csrf" value="{{.CSRF}}"><button>Send test email</button></form>
+  <form method="post" action="/settings/test-ha" class="inline"><input type="hidden" name="csrf" value="{{.CSRF}}"><button>Send test to Home Assistant</button></form>
+  <form method="post" action="/settings/check-update" class="inline"><input type="hidden" name="csrf" value="{{.CSRF}}"><button>Check for updates now</button></form>
+  <span class="muted small">Save first.</span>
+</div>
+<div class="card">
+  <h2>Copy filters between PCs</h2>
+  <p class="muted small">Export this PC's filter lists, then import the file on the other PC. Kid-specific rules are matched by kid name.</p>
+  <div class="row wrap">
+    <a class="button" href="/export">Export filters</a>
+    <form method="post" action="/import" enctype="multipart/form-data" class="row">
+      <input type="hidden" name="csrf" value="{{.CSRF}}">
+      <input type="file" name="file" accept="application/json,.json" required>
+      <button>Import</button>
+    </form>
+  </div>
+</div>
+{{end}}

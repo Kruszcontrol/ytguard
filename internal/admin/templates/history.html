@@ -1,0 +1,74 @@
+{{define "content"}}
+{{with .D.Error}}<div class="flash warn">{{.}}</div>{{else}}
+{{$k := .D.Kid}}{{$csrf := .CSRF}}
+<form method="get" action="/history" class="card row wrap">
+  <label>Kid <select name="kid" data-autosubmit>{{range $.Kids}}<option value="{{.ID}}" {{if eq .ID $k.ID}}selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+  <label>Day <input type="date" name="day" value="{{.D.Day}}" data-autosubmit></label>
+  <a href="/history?kid={{$k.ID}}&day={{.D.Prev}}">← Prev</a> <a href="/history?kid={{$k.ID}}&day={{.D.Next}}">Next →</a>
+  <span class="grow"></span>
+  <label>Quick actions apply to
+    <select data-quick-scope><option value="{{$k.ID}}">{{$k.Name}} only</option><option value="all">All kids</option></select>
+  </label>
+</form>
+{{$r := .D.Report}}
+<div class="card">
+  <div class="row between">
+    <h1>{{$k.Name}} · {{.D.Day}}</h1>
+    <div class="row">
+      <a class="button" href="/report?kid={{$k.ID}}&day={{.D.Day}}" target="_blank">Preview report</a>
+      <form method="post" action="/report/send" class="inline"><input type="hidden" name="csrf" value="{{$csrf}}"><input type="hidden" name="kid" value="{{$k.ID}}"><input type="hidden" name="day" value="{{.D.Day}}"><button>Send report now</button></form>
+    </div>
+  </div>
+  <p class="big">{{$r.TotalMin}} min <span class="muted">{{if ge $r.LimitMin 0}}of {{$r.LimitMin}} {{end}}· {{len $r.Videos}} videos{{if .D.Sent}} · daily report sent{{end}}</span></p>
+</div>
+
+<div class="card">
+  <h2>Watched</h2>
+  {{range .D.Watches}}
+  <div class="request">
+    <a class="video" href="{{watch .VideoID}}" target="_blank" rel="noopener">
+      <img src="{{thumb .VideoID}}" alt="" loading="lazy">
+      <span><b>{{.Title}}</b><br><span class="muted small">{{.ChannelName}} · {{clock .FirstSeen}}–{{clock .LastSeen}} · {{mins .Seconds}}</span></span>
+    </a>
+    <div class="actions">
+      {{template "quick" (qa $csrf $k.ID "hide" "deny" "video" .VideoID .Title "Hide video")}}
+      {{template "quick" (qa $csrf $k.ID "block" "deny" "video" .VideoID .Title "Block video")}}
+      {{if .ChannelID}}
+      {{template "quick" (qa $csrf $k.ID "hide" "deny" "channel" .ChannelID .ChannelName "Hide channel")}}
+      {{template "quick" (qa $csrf $k.ID "block" "deny" "channel" .ChannelID .ChannelName "Block channel")}}
+      {{template "quick" (qa $csrf $k.ID "block" "allow" "channel" .ChannelID .ChannelName "Allow channel")}}
+      {{end}}
+    </div>
+  </div>
+  {{else}}<p class="muted">Nothing watched.</p>{{end}}
+</div>
+
+<div class="card">
+  <h2>Blocked &amp; hidden attempts</h2>
+  {{range .D.Events}}
+  <div class="request">
+    <a class="video" href="{{watch .VideoID}}" target="_blank" rel="noopener">
+      <img src="{{thumb .VideoID}}" alt="" loading="lazy">
+      <span><b>{{.Title}}</b> <span class="tag {{if eq .Kind "hidden"}}deny{{else}}warn{{end}}">{{.Kind}}</span><br><span class="muted small">{{.ChannelName}} · {{clock .TS}} · {{.Reason}}</span></span>
+    </a>
+    <div class="actions">
+      {{if eq .Kind "blocked"}}{{template "quick" (qa $csrf $k.ID "block" "allow" "video" .VideoID .Title "Allow video")}}{{end}}
+      {{if .ChannelID}}{{template "quick" (qa $csrf $k.ID "block" "allow" "channel" .ChannelID .ChannelName "Allow channel")}}{{end}}
+      {{if eq .Kind "blocked"}}{{template "quick" (qa $csrf $k.ID "hide" "deny" "video" .VideoID .Title "Hide video")}}{{end}}
+    </div>
+  </div>
+  {{else}}<p class="muted">None.</p>{{end}}
+</div>
+{{end}}
+{{end}}
+
+{{define "quick"}}
+<form method="post" action="/filters/quick" class="inline" data-quick>
+  <input type="hidden" name="csrf" value="{{.CSRF}}">
+  <input type="hidden" name="kid" value="{{.Kid}}">
+  <input type="hidden" name="tier" value="{{.Tier}}"><input type="hidden" name="list" value="{{.List}}">
+  <input type="hidden" name="type" value="{{.Type}}"><input type="hidden" name="value" value="{{.Value}}">
+  <input type="hidden" name="label" value="{{.Label}}"><input type="hidden" name="from" value="history">
+  <button class="small {{if eq .List "allow"}}okbtn{{else}}ghost{{end}}">{{.Text}}</button>
+</form>
+{{end}}
