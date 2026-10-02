@@ -23,7 +23,7 @@ import (
 const (
 	pbkdf2Iter = 600_000
 	// MinPasswordLen is the minimum admin password length.
-	MinPasswordLen = 10
+	MinPasswordLen = 4
 
 	ScopeRead    = "read"
 	ScopeControl = "control"

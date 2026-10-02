@@ -107,7 +107,10 @@ func TestTokens(t *testing.T) {
 	if _, err := a.Session(tok, "ip"); err == nil {
 		t.Fatal("token accepted as session")
 	}
-	if err := ValidatePassword("short"); err == nil {
+	if err := ValidatePassword("abc"); err == nil {
 		t.Fatal("short password accepted")
+	}
+	if err := ValidatePassword("abcd"); err != nil {
+		t.Fatal(err)
 	}
 }

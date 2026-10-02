@@ -8,8 +8,8 @@
     <input type="hidden" name="csrf" value="{{$csrf}}">
     <label>Username <input name="username" value="{{.D.User}}" autocomplete="username"></label>
     <label>Current password <input name="current" type="password" required autocomplete="current-password"></label>
-    <label>New password <input name="new" type="password" required minlength="10" autocomplete="new-password"></label>
-    <label>Confirm new password <input name="confirm" type="password" required minlength="10" autocomplete="new-password"></label>
+    <label>New password <input name="new" type="password" required minlength="4" autocomplete="new-password"></label>
+    <label>Confirm new password <input name="confirm" type="password" required minlength="4" autocomplete="new-password"></label>
     <button class="primary">Change</button>
   </form>
 </div>
