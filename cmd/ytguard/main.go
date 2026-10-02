@@ -65,18 +65,18 @@ func main() {
 		fs.BoolVar(&o.Check, "check", false, "only check whether a newer release exists")
 		fs.StringVar(&o.File, "file", "", "install this ytguard binary instead of downloading a release")
 		fs.BoolVar(&o.Yes, "y", false, "don't ask for confirmation")
-		fs.Parse(args)
+		parseFlags(fs, args)
 		err = install.Upgrade(context.Background(), o)
 	case "uninstall":
 		fs := flag.NewFlagSet("uninstall", flag.ExitOnError)
 		purge := fs.Bool("purge", false, "also delete all data and the service user")
-		fs.Parse(args)
+		parseFlags(fs, args)
 		err = install.Uninstall(*purge)
 	case "scan":
 		fs := flag.NewFlagSet("scan", flag.ExitOnError)
 		data := fs.String("data", install.DataDir, "data directory")
 		quiet := fs.Bool("quiet", false, "don't print findings")
-		fs.Parse(args)
+		parseFlags(fs, args)
 		err = install.Scan(*data, !*quiet)
 	case "passwd":
 		err = passwd(args)
@@ -112,15 +112,13 @@ func cmdInstall(args []string) error {
 	fs.IntVar(&opt.YouTubeRestrict, "youtube-restrict", 0, "also force YouTube Restricted Mode: 0 off, 1 moderate, 2 strict")
 	fs.BoolVar(&opt.AllowExtensions, "allow-extensions", false, "don't block other Chrome extensions")
 	fs.BoolVar(&opt.Upgrade, "upgrade", false, "reinstall this binary with the previous install's settings, without questions")
-	fs.Parse(args)
+	parseFlags(fs, args)
 	return install.Install(opt)
 }
 
 func openStore(fs *flag.FlagSet, args []string) (*store.Store, string, error) {
 	data := fs.String("data", install.DataDir, "data directory")
-	if err := fs.Parse(args); err != nil {
-		return nil, "", err
-	}
+	parseFlags(fs, args)
 	st, err := store.Open(*data)
 	return st, *data, err
 }
@@ -225,7 +223,7 @@ func listCheck(files []string) error {
 func cmdPolicy(args []string) error {
 	fs := flag.NewFlagSet("policy", flag.ExitOnError)
 	data := fs.String("data", install.DataDir, "data directory")
-	fs.Parse(args)
+	parseFlags(fs, args)
 	key, err := install.ExtensionKey(*data)
 	if err != nil {
 		return err
@@ -242,7 +240,7 @@ func serve(args []string) error {
 	adminHTTP := fs.Bool("admin-http", false, "serve the admin UI over plain HTTP (only on a loopback address, behind a TLS reverse proxy)")
 	trustProxy := fs.Bool("trust-proxy", false, "use X-Forwarded-For for client IPs (with --admin-http behind a proxy)")
 	dev := fs.Bool("dev", false, "development mode: accept unpacked extensions; allow --admin-http on any address")
-	fs.Parse(args)
+	parseFlags(fs, args)
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	slog.SetDefault(logger)
@@ -349,6 +347,17 @@ func isLoopback(addr string) bool {
 	}
 	ip := net.ParseIP(host)
 	return ip != nil && ip.IsLoopback()
+}
+
+// parseFlags parses flags and refuses leftover words, so a typo like
+// "-- file x" fails instead of silently doing something else.
+func parseFlags(fs *flag.FlagSet, args []string) {
+	fs.Parse(args)
+	if fs.NArg() > 0 {
+		fmt.Fprintf(os.Stderr, "error: unexpected %q (options start with --, e.g. --file PATH)\n\nOptions for %s:\n", strings.Join(fs.Args(), " "), fs.Name())
+		fs.PrintDefaults()
+		os.Exit(2)
+	}
 }
 
 func firstNonEmpty(s ...string) string {
