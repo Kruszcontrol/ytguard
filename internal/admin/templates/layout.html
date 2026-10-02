@@ -16,7 +16,7 @@
   <a class="brand" href="/">YTGuard{{if .PCName}} <span class="pc">{{.PCName}}</span>{{end}}</a>
   <nav>
     <a href="/" {{if eq .Active "dashboard"}}class="on"{{end}}>Dashboard</a>
-    <a href="/filters" {{if or (eq .Active "filters") (eq .Active "overview")}}class="on"{{end}}>Filters</a>
+    <a href="/filters" {{if or (eq .Active "filters") (eq .Active "overview") (eq .Active "lists") (eq .Active "list")}}class="on"{{end}}>Filters</a>
     <a href="/history" {{if eq .Active "history"}}class="on"{{end}}>History</a>
     <a href="/kids" {{if or (eq .Active "kids") (eq .Active "kid")}}class="on"{{end}}>Kids</a>
     <a href="/tester" {{if eq .Active "tester"}}class="on"{{end}}>Tester</a>

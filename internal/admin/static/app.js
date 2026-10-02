@@ -34,5 +34,14 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   document.querySelector('[data-copy-first-row]')?.addEventListener('click', () => copyRow(6));
   document.querySelector('[data-copy-weekdays]')?.addEventListener('click', () => copyRow(4));
+  // Kid pickers: "All kids" and individual kids exclude each other.
+  document.querySelectorAll('input[type=checkbox][name=kid]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      if (!cb.checked) return;
+      cb.form.querySelectorAll('input[type=checkbox][name=kid]').forEach(o => {
+        if (o !== cb && (cb.value === 'all') !== (o.value === 'all')) o.checked = false;
+      });
+    });
+  });
   document.querySelectorAll('[data-select]').forEach(i => i.addEventListener('focus', () => i.select()));
 });
