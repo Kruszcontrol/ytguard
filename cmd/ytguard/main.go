@@ -183,7 +183,7 @@ func cmdPolicy(args []string) error {
 	if err != nil {
 		return err
 	}
-	b, _ := json.MarshalIndent(install.Policy(crx.ExtensionID(&key.PublicKey), install.Options{}), "", "  ")
+	b, _ := json.MarshalIndent(install.Policy(crx.ExtensionID(&key.PublicKey), install.Options{}, install.Blocklist()), "", "  ")
 	fmt.Println(string(b))
 	return nil
 }

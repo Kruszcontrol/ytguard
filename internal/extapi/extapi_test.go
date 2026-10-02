@@ -5,6 +5,8 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os/user"
@@ -44,6 +46,8 @@ func setup(t *testing.T) *env {
 		t.Fatal(err)
 	}
 	app := core.New(st)
+	// Never reach YouTube from tests.
+	app.YT.HTTP = &http.Client{Transport: noNet{}}
 	key, _ := rsa.GenerateKey(rand.Reader, 2048)
 	s := &Server{App: app, Key: key, Addr: "127.0.0.1:7878"}
 	if err := s.Prepare(); err != nil {
@@ -52,6 +56,12 @@ func setup(t *testing.T) *env {
 	srv := httptest.NewServer(s.Handler())
 	t.Cleanup(srv.Close)
 	return &env{t: t, url: srv.URL, app: app, kid: k}
+}
+
+type noNet struct{}
+
+func (noNet) RoundTrip(*http.Request) (*http.Response, error) {
+	return nil, errors.New("no network in tests")
 }
 
 func (e *env) call(path string, body any, out any) int {
@@ -124,7 +134,7 @@ func TestFlow(t *testing.T) {
 		Status  timekeeper.Status
 		Outcome string
 	}
-	e.call("/api/heartbeat", map[string]any{"videoId": meta.VideoID, "playing": true, "start": true}, &hb)
+	e.call("/api/heartbeat", map[string]any{"videoId": meta.VideoID, "title": meta.Title, "playing": true, "start": true}, &hb)
 	if !hb.Status.Allowed || hb.Outcome != rules.Play {
 		t.Fatalf("heartbeat: %+v", hb)
 	}
@@ -153,7 +163,7 @@ func TestFlow(t *testing.T) {
 		t.Fatalf("events: %+v", evs)
 	}
 	// Heartbeat for a now-hidden video doesn't count and tells the page.
-	e.call("/api/heartbeat", map[string]any{"videoId": meta.VideoID, "playing": true}, &hb)
+	e.call("/api/heartbeat", map[string]any{"videoId": meta.VideoID, "title": meta.Title, "playing": true}, &hb)
 	if hb.Outcome != rules.Hide {
 		t.Fatalf("heartbeat outcome: %+v", hb)
 	}
@@ -253,5 +263,46 @@ func TestShortsSetting(t *testing.T) {
 	// Legacy option still means hide.
 	if (store.KidOptions{HideShorts: true}).ShortsMode() != store.ShortsHide {
 		t.Error("legacy hideShorts not honored")
+	}
+}
+
+func TestClientMetadataNotCached(t *testing.T) {
+	e := setup(t)
+	// The kid calls the API directly, claiming a blocked video is harmless.
+	bad := rules.Rule{Tier: rules.TierHide, List: rules.ListDeny, Type: rules.TypeChannel, Value: "UCbadbadbadbadbadbadbadb"}
+	e.app.St.AddRule(&bad)
+	fake := rules.Meta{VideoID: "evilevilevi", Title: "Nice", ChannelID: "UCgoodgoodgoodgoodgoodgo", Full: true}
+	var c checkResp
+	e.call("/api/check", fake, &c)
+	if _, ok := e.app.St.Meta("evilevilevi"); ok {
+		t.Fatal("client-supplied metadata was cached")
+	}
+	// A later tile/partial check must not be decided by the forged data.
+	var f struct{ Results map[string]string }
+	e.call("/api/filter", map[string]any{"items": []rules.Meta{{VideoID: "evilevilevi", ChannelID: "UCbadbadbadbadbadbadbadb"}}}, &f)
+	if f.Results["evilevilevi"] != "hide" {
+		t.Fatalf("tile = %q", f.Results["evilevilevi"])
+	}
+}
+
+func TestRequestRateLimit(t *testing.T) {
+	e := setup(t)
+	codes := map[int]int{}
+	for i := 0; i < core.MaxRequestsPerHour+3; i++ {
+		id := fmt.Sprintf("vid%08d", i)
+		e.app.St.PutMeta(rules.Meta{VideoID: id, Title: "t", Full: true})
+		e.call("/api/check", rules.Meta{VideoID: id}, nil) // kid sees it blocked first
+		codes[e.call("/api/request", map[string]string{"videoId": id}, nil)]++
+	}
+	if codes[200] != core.MaxRequestsPerHour || codes[http.StatusTooManyRequests] != 3 {
+		t.Fatalf("codes = %v", codes)
+	}
+}
+
+func TestRequestNeedsPriorBlock(t *testing.T) {
+	e := setup(t)
+	// Never shown to the kid: can't be requested.
+	if c := e.call("/api/request", map[string]string{"videoId": "neverseen01"}, nil); c != 400 {
+		t.Fatalf("request without prior block: %d", c)
 	}
 }

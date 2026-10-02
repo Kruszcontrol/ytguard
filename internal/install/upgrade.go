@@ -100,7 +100,10 @@ func Upgrade(ctx context.Context, o UpgradeOptions) error {
 		return errors.New("cancelled")
 	}
 
-	backup := filepath.Join(DataDir, "ytguard.previous")
+	backup := PrevBinPath
+	if err := os.MkdirAll(filepath.Dir(backup), 0o755); err != nil {
+		return err
+	}
 	if err := copyFile(BinPath, backup, 0o755); err != nil {
 		return fmt.Errorf("back up current binary: %w", err)
 	}

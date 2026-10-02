@@ -431,13 +431,22 @@
     scanQueued = true;
     setTimeout(() => { scanQueued = false; scan(); onLocation(); }, 150);
   };
-  new MutationObserver(queueScan).observe(root, { childList: true, subtree: true });
+  // Until a video is cleared (and always for hidden ones) the tab title must
+  // not show its name.
+  const scrubTitle = () => {
+    if (S.managed === false) return;
+    const vid = videoIdFromURL(location.href);
+    if (!vid) return;
+    const cleared = S.vid === vid && S.decision && S.decision.outcome !== 'hide';
+    if (!cleared && document.title !== 'YouTube') document.title = 'YouTube';
+  };
+  new MutationObserver(() => { scrubTitle(); queueScan(); }).observe(root, { childList: true, subtree: true, characterData: true });
   document.addEventListener('yt-navigate-finish', onLocation, true);
   window.addEventListener('popstate', onLocation);
   setInterval(() => {
     onLocation();
     scan();
-    if (S.decision && S.decision.outcome === 'hide' && document.title !== 'YouTube') document.title = 'YouTube';
+    scrubTitle();
   }, 1000);
 
   (async () => {

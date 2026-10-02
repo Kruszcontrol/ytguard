@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -679,13 +680,17 @@ func (s *Server) settingsSave(w http.ResponseWriter, r *req) {
 	if r.FormValue("yt_key_clear") == "on" {
 		st.YouTubeAPIKey = ""
 	}
-	st.EmbedOrigins = strings.Join(strings.Fields(r.FormValue("embed_origins")), " ")
-	for _, o := range strings.Fields(st.EmbedOrigins) {
-		if !strings.HasPrefix(o, "https://") && !strings.HasPrefix(o, "http://") {
-			back(w, r, "/settings", "", fmt.Errorf("embed origin %q must start with https:// or http://", o))
+	var origins []string
+	for _, o := range strings.Fields(r.FormValue("embed_origins")) {
+		u, err := url.Parse(o)
+		if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || strings.Trim(u.Path, "/") != "" ||
+			u.RawQuery != "" || u.User != nil || strings.ContainsAny(u.Host, ";,'\" ") {
+			back(w, r, "/settings", "", fmt.Errorf("embed origin %q must look like https://homeassistant.local:8123", o))
 			return
 		}
+		origins = append(origins, u.Scheme+"://"+u.Host)
 	}
+	st.EmbedOrigins = strings.Join(origins, " ")
 	st.SessionDays = min(max(formInt(r, "session_days", 90), 1), 400)
 	st.UpdateCheck = r.FormValue("update_check") == "on"
 	if err := s.App.St.SaveSettings(st); err != nil {

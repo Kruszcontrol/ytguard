@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -28,8 +29,26 @@ const (
 	ExtAddr     = "127.0.0.1:7878" // must match extension/background.js
 
 	policyName    = "ytguard.json"
-	blocklistName = "ytguard-blocklist.json"
+	blocklistName = "ytguard-blocklist.json" // old separate policy file, migrated into BlocklistPath
+
+	// ConfDir holds root-owned settings. Nothing in DataDir (writable by the
+	// service user) is ever trusted by root.
+	ConfDir       = "/etc/ytguard"
+	OptionsPath   = ConfDir + "/install.json"
+	BlocklistPath = ConfDir + "/url-blocklist.txt"
+	// PrevBinPath keeps the previous binary after an upgrade (root-owned).
+	PrevBinPath = "/usr/local/lib/ytguard/ytguard.previous"
 )
+
+var addrRe = regexp.MustCompile(`^(\[[0-9A-Fa-f:.]+\]|[A-Za-z0-9.-]*):[0-9]{1,5}$`)
+
+// ValidateAddr checks a listen address like ":8443" or "192.168.1.5:8443".
+func ValidateAddr(a string) error {
+	if !addrRe.MatchString(a) {
+		return fmt.Errorf("bad listen address %q (want e.g. :8443 or 192.168.1.5:8443)", a)
+	}
+	return nil
+}
 
 // PolicyDirs are where Chrome and Chromium read managed policy on Linux.
 var PolicyDirs = []string{"/etc/opt/chrome/policies/managed", "/etc/chromium/policies/managed"}
@@ -47,14 +66,15 @@ type Options struct {
 	Kids           []string `json:"-"` // "linuxuser:Name" pairs for non-interactive installs
 }
 
-const optionsFile = "install.json"
-
 // SavedOptions returns the options of the previous install. Installs from
 // before install.json existed are reconstructed from the unit and policy.
 func SavedOptions() (Options, error) {
 	var o Options
-	if b, err := os.ReadFile(filepath.Join(DataDir, optionsFile)); err == nil {
-		return o, json.Unmarshal(b, &o)
+	if b, err := os.ReadFile(OptionsPath); err == nil {
+		if err := json.Unmarshal(b, &o); err != nil {
+			return o, err
+		}
+		return o, ValidateAddr(o.AdminAddr)
 	}
 	unit, err := os.ReadFile(UnitPath)
 	if err != nil {
@@ -66,6 +86,9 @@ func SavedOptions() (Options, error) {
 		if w == "--admin-addr" && i+1 < len(f) {
 			o.AdminAddr = f[i+1]
 		}
+	}
+	if err := ValidateAddr(o.AdminAddr); err != nil {
+		return o, err
 	}
 	var pol map[string]any
 	if b, err := os.ReadFile(filepath.Join(PolicyDirs[0], policyName)); err == nil && json.Unmarshal(b, &pol) == nil {
@@ -81,8 +104,11 @@ func SavedOptions() (Options, error) {
 }
 
 func saveOptions(o Options) error {
+	if err := os.MkdirAll(ConfDir, 0o755); err != nil {
+		return err
+	}
 	b, _ := json.MarshalIndent(o, "", "  ")
-	return os.WriteFile(filepath.Join(DataDir, optionsFile), b, 0o600)
+	return os.WriteFile(OptionsPath, b, 0o644)
 }
 
 // Prompter reads answers from the terminal.
@@ -180,6 +206,9 @@ func Install(opt Options) error {
 	if opt.AdminAddr == "" {
 		opt.AdminAddr = ":8443"
 	}
+	if err := ValidateAddr(opt.AdminAddr); err != nil {
+		return err
+	}
 
 	// Binary.
 	self, err := os.Executable()
@@ -203,6 +232,9 @@ func Install(opt Options) error {
 		}
 	}
 	if err := os.MkdirAll(DataDir, 0o700); err != nil {
+		return err
+	}
+	if err := os.Chmod(DataDir, 0o700); err != nil {
 		return err
 	}
 
@@ -351,8 +383,9 @@ func humanUsers() []string {
 	return out
 }
 
-// Policy returns the managed Chrome policy for the extension ID.
-func Policy(extID string, opt Options) map[string]any {
+// Policy returns the managed Chrome policy for the extension ID. blocklist
+// is added to URLBlocklist after the built-in entries.
+func Policy(extID string, opt Options, blocklist []string) map[string]any {
 	ext := map[string]any{
 		extID: map[string]any{
 			"installation_mode": "force_installed",
@@ -369,6 +402,8 @@ func Policy(extID string, opt Options) map[string]any {
 		"BrowserGuestModeEnabled":    false,
 		"BrowserAddPersonEnabled":    false,
 		"DeveloperToolsAvailability": 2, // blocks devtools and view-source
+		// javascript: URLs (typed or bookmarklets) would run code in YouTube's page.
+		"URLBlocklist": append([]string{"javascript://*"}, blocklist...),
 	}
 	if opt.YouTubeRestrict > 0 {
 		p["ForceYouTubeRestrict"] = opt.YouTubeRestrict
@@ -377,19 +412,54 @@ func Policy(extID string, opt Options) map[string]any {
 }
 
 // defaultBlocklist blocks alternative YouTube front-ends that would bypass
-// the extension. Written once; edit the file to add more.
-var defaultBlocklist = map[string]any{
-	"URLBlocklist": []string{
-		"yewtu.be", "inv.nadeko.net", "invidious.nerdvpn.de", "invidious.jing.rocks", "invidious.privacyredirect.com",
-		"iv.ggtyler.dev", "invidious.f5.si", "inv.tux.pizza", "piped.video", "piped.kavin.rocks", "piped.private.coffee",
-		"poketube.fun", "tube.cadence.moe", "viewtube.io", "youtube.googleapis.com", "ytb.trom.tf",
-	},
+// the extension. Written once to BlocklistPath; edit that file to change it.
+var defaultBlocklist = []string{
+	"yewtu.be", "inv.nadeko.net", "invidious.nerdvpn.de", "invidious.jing.rocks", "invidious.privacyredirect.com",
+	"iv.ggtyler.dev", "invidious.f5.si", "inv.tux.pizza", "piped.video", "piped.kavin.rocks", "piped.private.coffee",
+	"poketube.fun", "tube.cadence.moe", "viewtube.io", "youtube.googleapis.com", "ytb.trom.tf",
+}
+
+// Blocklist reads BlocklistPath (one Chrome URL pattern per line, # comments).
+func Blocklist() []string {
+	b, err := os.ReadFile(BlocklistPath)
+	if err != nil {
+		return defaultBlocklist
+	}
+	var out []string
+	for _, line := range strings.Split(string(b), "\n") {
+		if line = strings.TrimSpace(line); line != "" && !strings.HasPrefix(line, "#") {
+			out = append(out, line)
+		}
+	}
+	return out
+}
+
+// ensureBlocklist creates BlocklistPath once, carrying over entries from
+// the old separate policy file if present.
+func ensureBlocklist() error {
+	if _, err := os.Stat(BlocklistPath); err == nil {
+		return nil
+	}
+	list := defaultBlocklist
+	var old struct{ URLBlocklist []string }
+	if b, err := os.ReadFile(filepath.Join(PolicyDirs[0], blocklistName)); err == nil && json.Unmarshal(b, &old) == nil && len(old.URLBlocklist) > 0 {
+		list = old.URLBlocklist
+	}
+	if err := os.MkdirAll(ConfDir, 0o755); err != nil {
+		return err
+	}
+	text := "# Sites Chrome blocks for everyone on this PC (alternative YouTube front-ends etc.).\n" +
+		"# One Chrome URL pattern per line. After editing run: sudo ytguard install --upgrade\n" +
+		strings.Join(list, "\n") + "\n"
+	return os.WriteFile(BlocklistPath, []byte(text), 0o644)
 }
 
 // WritePolicy writes Chrome/Chromium managed policy files.
 func WritePolicy(extID string, opt Options) error {
-	data, _ := json.MarshalIndent(Policy(extID, opt), "", "  ")
-	blk, _ := json.MarshalIndent(defaultBlocklist, "", "  ")
+	if err := ensureBlocklist(); err != nil {
+		return err
+	}
+	data, _ := json.MarshalIndent(Policy(extID, opt, Blocklist()), "", "  ")
 	wrote := false
 	for i, dir := range PolicyDirs {
 		// Chromium's directory only if Chromium is installed.
@@ -404,11 +474,8 @@ func WritePolicy(extID string, opt Options) error {
 		if err := os.WriteFile(filepath.Join(dir, policyName), data, 0o644); err != nil {
 			return err
 		}
-		if _, err := os.Stat(filepath.Join(dir, blocklistName)); errors.Is(err, os.ErrNotExist) {
-			if err := os.WriteFile(filepath.Join(dir, blocklistName), blk, 0o644); err != nil {
-				return err
-			}
-		}
+		// One URLBlocklist only: Chrome doesn't merge it across policy files.
+		_ = os.Remove(filepath.Join(dir, blocklistName))
 		fmt.Println("Wrote Chrome policy", filepath.Join(dir, policyName))
 		wrote = true
 	}
@@ -471,7 +538,9 @@ func Uninstall(purge bool) error {
 		_ = os.Remove(filepath.Join(dir, blocklistName))
 	}
 	_ = os.Remove(BinPath)
+	_ = os.RemoveAll(filepath.Dir(PrevBinPath))
 	if purge {
+		_ = os.RemoveAll(ConfDir)
 		if err := os.RemoveAll(DataDir); err != nil {
 			return err
 		}

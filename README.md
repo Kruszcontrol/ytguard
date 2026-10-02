@@ -62,8 +62,8 @@ The installer:
 1. installs `/usr/local/bin/ytguard` and a `ytguard` system user;
 2. asks for **YTGuard's parent login** (its own username/password — not a Linux account);
 3. asks which Linux accounts are kids;
-4. writes Chrome policy (`/etc/opt/chrome/policies/managed/ytguard.json`) that force-installs the extension and disables incognito, guest mode, adding profiles, developer tools, and (optionally) all other extensions;
-5. writes `/etc/opt/chrome/policies/managed/ytguard-blocklist.json` blocking alternative YouTube front-ends (Invidious, Piped…). It's only written once, so you can edit it;
+4. writes Chrome policy (`/etc/opt/chrome/policies/managed/ytguard.json`) that force-installs the extension and disables incognito, guest mode, adding profiles, developer tools, `javascript:` URLs/bookmarklets, and (optionally) all other extensions;
+5. blocks alternative YouTube front-ends (Invidious, Piped…) listed in `/etc/ytguard/url-blocklist.txt`. That file is written once, so edit it, then run `sudo ytguard install --upgrade` to apply;
 6. starts the `ytguard` service and prints the UI address and certificate fingerprint.
 
 Options: `--admin-addr :8443`, `--youtube-restrict 1|2` (also force YouTube Restricted Mode), `--allow-extensions`.
@@ -95,7 +95,7 @@ sudo ytguard upgrade            # shows what's new, asks, downloads, verifies th
 sudo ytguard upgrade --check    # just check
 ```
 
-An upgrade keeps everything: kids, filters, history, logins, Home Assistant tokens, the certificate and the extension ID. The service restarts (kids may see "not responding" for a few seconds). Chrome picks up the new extension within a few hours, or as soon as it's restarted. Database changes are applied automatically, after a backup to `/var/lib/ytguard/ytguard.db.backup-*`. The previous binary is kept as `/var/lib/ytguard/ytguard.previous` in case you need to go back.
+An upgrade keeps everything: kids, filters, history, logins, Home Assistant tokens, the certificate and the extension ID. The service restarts (kids may see "not responding" for a few seconds). Chrome picks up the new extension within a few hours, or as soon as it's restarted. Database changes are applied automatically, after a backup to `/var/lib/ytguard/ytguard.db.backup-*`. The previous binary is kept as `/usr/local/lib/ytguard/ytguard.previous` in case you need to go back. The download is checked against the release's `SHA256SUMS`. That catches corrupted downloads, but trusts whoever controls the GitHub repository.
 
 To install your own build over an existing install: `make upgrade` (or `sudo ./ytguard upgrade --file ./ytguard`).
 
@@ -159,10 +159,14 @@ Designed to stop kids from casually (and moderately cleverly) getting around it 
 - Can't remove or disable the extension, use incognito or guest profiles, open devtools or view-source, or install other extensions.
 - Can't stop the daemon or read or alter its data (it runs as its own user; the data is `0700`).
 - Can't impersonate a sibling: identity comes from the kernel's socket ownership, not from anything the kid controls.
+- Can't fake video details to the daemon: what the extension sends is only used for that one decision, never cached. Approval requests only work for videos the kid was actually shown as blocked, and are limited to 10 per hour.
+- Root never trusts anything the service account can write: install settings live in `/etc/ytguard`, and the rollback binary in `/usr/local/lib/ytguard`.
 
 Known limits:
 
 - **Chrome only.** Other browsers, YouTube on phones/TVs/consoles, and YouTube videos embedded in Google search results are out of scope. Use router/DNS controls for other devices.
+- A kid can run a **portable browser** (e.g. a Firefox download unpacked in their home folder) without sudo; YTGuard can't see that browser. Mounting `/home` with the `noexec` option stops programs running from home folders. This is the main remaining gap for tech-savvy kids.
+- If the ytguard service is stopped, the extension fails closed (nothing plays). A kid can't stop it, but if it crashed, another program could briefly take its port during the 2-second restart. That is far-fetched, but noted.
 - A determined, technical kid could edit the extension's files inside their own Chrome profile directory. Chrome doesn't verify self-hosted extensions the way it does Web Store ones.
 - YouTube changes its page structure from time to time. Tile selectors live in `extension/content.js` and `extension/overlay.css`. Unknown tile types stay hidden rather than shown (fail closed).
 - Policy is machine-wide: blocking extensions and devtools also affects parent accounts on that PC.

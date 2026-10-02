@@ -74,19 +74,23 @@ func (a *App) Policy(k store.Kid) (rules.Policy, error) {
 // Decide evaluates a video for a kid. When full is true (the kid opened
 // the video) missing metadata is fetched so every rule can be checked.
 func (a *App) Decide(ctx context.Context, k store.Kid, m rules.Meta, full bool) (rules.Decision, rules.Meta, error) {
+	// The cache only holds metadata the daemon fetched itself (plus "is a
+	// Short" flags): what the extension sends is used for this decision but
+	// never stored, so a kid can't poison it by calling the API directly.
 	if cached, ok := a.St.Meta(m.VideoID); ok {
-		m.Merge(cached) // keeps m's own values; IsShort sticks once seen
+		m.Merge(cached) // keeps m's own values
 	}
-	if m.Full || m.IsShort {
-		_ = a.St.PutMeta(m)
+	if m.IsShort {
+		_ = a.St.PutMeta(rules.Meta{VideoID: m.VideoID, IsShort: true})
 	}
 	if full && !m.Full && m.VideoID != "" {
 		ctx, cancel := context.WithTimeout(ctx, 6*time.Second)
 		fetched, err := a.YT.Video(ctx, m.VideoID)
 		cancel()
 		if err == nil {
+			fetched.IsShort = fetched.IsShort || m.IsShort
+			_ = a.St.PutMeta(fetched)
 			m.Merge(fetched)
-			_ = a.St.PutMeta(m)
 		} else {
 			slog.Warn("fetch video metadata", "video", m.VideoID, "err", err)
 		}
@@ -269,6 +273,19 @@ func (a *App) RequestAccess(ctx context.Context, k store.Kid, videoID, message s
 	if d.Final {
 		return store.Request{}, errors.New("this is turned off by a parent setting")
 	}
+	// Only videos the kid was actually shown as blocked can be requested.
+	// (Also covers the case where YouTube couldn't be reached to check the
+	// video's details here.)
+	ev, err := a.St.LatestEvent(k.ID, videoID, a.Now().Add(-time.Hour))
+	if err != nil || ev.Kind != store.EventBlocked {
+		return store.Request{}, errors.New("not available")
+	}
+	if m.Title == "" {
+		m.Title, m.ChannelID, m.ChannelName = ev.Title, ev.ChannelID, ev.ChannelName
+	}
+	if n, err := a.St.CountRequestsSince(k.ID, a.Now().Add(-time.Hour)); err == nil && n >= MaxRequestsPerHour {
+		return store.Request{}, ErrTooManyRequests
+	}
 	r := store.Request{KidID: k.ID, KidName: k.Name, VideoID: videoID, Title: m.Title, ChannelID: m.ChannelID,
 		ChannelName: m.ChannelName, Reason: d.Reason, Message: truncate(strings.TrimSpace(message), 300)}
 	created, err := a.St.CreateRequest(&r)
@@ -285,6 +302,12 @@ func (a *App) RequestAccess(ctx context.Context, k store.Kid, videoID, message s
 	}
 	return r, nil
 }
+
+// MaxRequestsPerHour limits new approval requests per kid (notification spam).
+const MaxRequestsPerHour = 10
+
+// ErrTooManyRequests is returned when a kid hits MaxRequestsPerHour.
+var ErrTooManyRequests = errors.New("you've asked a lot already; wait a bit and try again")
 
 // Approve scopes.
 const (

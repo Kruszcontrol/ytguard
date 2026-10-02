@@ -311,6 +311,10 @@ func (s *Server) request(w http.ResponseWriter, r *http.Request, c who) {
 		return
 	}
 	rq, err := s.App.RequestAccess(r.Context(), *c.Kid, req.VideoID, req.Message)
+	if errors.Is(err, core.ErrTooManyRequests) {
+		http.Error(w, err.Error(), http.StatusTooManyRequests)
+		return
+	}
 	if err != nil {
 		http.Error(w, err.Error(), 400)
 		return

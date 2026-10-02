@@ -705,6 +705,19 @@ func (s *Store) AddEvent(kidID int64, day, kind string, m rules.Meta, reason str
 	return err
 }
 
+// LatestEvent returns a kid's most recent blocked/hidden event for a video
+// after t.
+func (s *Store) LatestEvent(kidID int64, videoID string, t time.Time) (Event, error) {
+	var e Event
+	err := s.DB.QueryRow(`SELECT id, ts, kind, video_id, title, channel_id, channel_name, reason FROM events
+		WHERE kid_id=? AND video_id=? AND ts>? ORDER BY id DESC LIMIT 1`, kidID, videoID, t.Unix()).
+		Scan(&e.ID, &e.TS, &e.Kind, &e.VideoID, &e.Title, &e.ChannelID, &e.ChannelName, &e.Reason)
+	if errors.Is(err, sql.ErrNoRows) {
+		return e, ErrNotFound
+	}
+	return e, err
+}
+
 // Events lists a kid's events for a day.
 func (s *Store) Events(kidID int64, day string) ([]Event, error) {
 	rows, err := s.DB.Query(`SELECT id, ts, kind, video_id, title, channel_id, channel_name, reason FROM events WHERE kid_id=? AND day=? ORDER BY ts`, kidID, day)
@@ -774,6 +787,13 @@ func (s *Store) CreateRequest(r *Request) (created bool, err error) {
 	}
 	r.ID, _ = res.LastInsertId()
 	return true, nil
+}
+
+// CountRequestsSince counts requests a kid created after t.
+func (s *Store) CountRequestsSince(kidID int64, t time.Time) (int, error) {
+	var n int
+	err := s.DB.QueryRow(`SELECT COUNT(*) FROM requests WHERE kid_id=? AND created_at>?`, kidID, t.Unix()).Scan(&n)
+	return n, err
 }
 
 // Request returns one request.

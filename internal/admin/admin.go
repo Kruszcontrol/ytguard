@@ -346,6 +346,7 @@ func back(w http.ResponseWriter, r *req, fallback, msg string, err error) {
 			}
 		}
 	}
+	target = safeNext(target) // same-site paths only
 	sep := "?"
 	if strings.Contains(target, "?") {
 		sep = "&"
