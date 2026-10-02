@@ -3,6 +3,7 @@
 Family YouTube controls for Linux Mint (or any systemd Linux) + Google Chrome.
 
 - **Two-tier filtering**: **Hide** (the kid never sees the video — no title or thumbnail anywhere) and **Block** (visible with a lock; the kid can ask a parent). Each tier has its own Allow and Deny lists for videos, channels, keywords (title / description / tags / channel name), categories and attributes (Shorts, live, long videos, YouTube's kid-safety flags).
+- **Shared filter lists**: subscribe to public lists by topic and age range (like Pi-hole/ad-block lists) from [ytguard-lists](https://github.com/Kruszcontrol/ytguard-lists) or any https address. They update daily, and your own entries always override them.
 - **Shorts switch** per kid: follow the filters, block all Shorts, or hide them everywhere.
 - **Time controls** per kid and weekday: daily minutes, allowed hours, enforced breaks (e.g. every 20 min watching → 10 min pause), bonus time, pause now.
 - **Approval requests**: the kid taps "Ask a parent"; you approve the video or its whole channel from the web UI or a Home Assistant phone notification.
@@ -123,6 +124,35 @@ Examples: Block-Allow keyword "minecraft" + Hide-Deny keyword "creepy" → "Cree
 
 Without a YouTube API key, feed tiles only expose title and channel, so description/tag/category rules are checked when a video is opened. Hidden videos then get the "not available" screen. With a free YouTube Data API v3 key (Settings), those rules also apply to tiles before they're shown.
 
+### Shared filter lists
+
+Under **Filters → Lists** you can subscribe to lists that other people maintain, choose which kids each applies to, and switch them on or off.
+The recommended lists come from [Kruszcontrol/ytguard-lists](https://github.com/Kruszcontrol/ytguard-lists): scary/horror, violence, mature content, dangerous challenges, gambling and scams, and basics for young kids, with suggested ages.
+You can also subscribe to any https:// address.
+
+- **Your own entries win** over a list's entry of the same type. The usual order still applies (video → channel → keyword → category → attribute). So to undo a list's channel entry, add that channel (or a video) yourself; a broad keyword Allow won't unhide a channel a list hides.
+- The Rule tester and History say which list made a decision, and the Tester has one-click **Allow this video / channel** overrides.
+- Lists are checked for updates daily. If a download fails, the previous copy stays in use. Lines a list gets wrong are skipped and shown as warnings.
+- Lists can contain Allow entries too; the Lists page shows how many, so you can see whether a list loosens anything.
+- **Share your own:** Filters → Lists → *Download list file* exports your all-kids entries in list format.
+
+List format (plain text):
+
+```
+! Title: Scary and horror
+! Description: Hides horror and creepypasta.
+! Ages: 0-12
+[hide deny]
+keyword: creepypasta
+keyword(title,description,tags): jumpscare
+channel: UCxxxxxxxxxxxxxxxxxxxxxx @handle Channel name
+attribute: not_family_safe
+[block deny]
+keyword: prank
+```
+
+The full format and contribution guide are in the [ytguard-lists README](https://github.com/Kruszcontrol/ytguard-lists#list-format). Check a file with `ytguard list-check FILE`.
+
 ### Shorts
 
 Per kid (Kids → Shorts), overriding all filter rules and approvals:
@@ -211,6 +241,7 @@ sudo ytguard passwd
 ytguard serve [--data DIR] [--admin-addr ADDR] [--admin-http] [--trust-proxy] [--dev]
 ytguard report --kid NAME [--day YYYY-MM-DD] [--send] [--html]
 ytguard policy
+ytguard list-check FILE...
 ytguard version [-v]
 ```
 
@@ -256,6 +287,7 @@ internal/store/       SQLite
 internal/install/     installer, upgrade, Chrome policy, systemd unit, certificates
 internal/update/      GitHub release check + verified download
 internal/appscan/     detection of other browsers / video apps
+internal/filterlist/  shared filter list format, download, catalog
 extension/            Chrome MV3 extension (packed and signed by the daemon at start)
 ```
 

@@ -15,6 +15,7 @@ import (
 
 	"ytguard/internal/auth"
 	"ytguard/internal/core"
+	"ytguard/internal/filterlist"
 	"ytguard/internal/notify"
 	"ytguard/internal/report"
 	"ytguard/internal/rules"
@@ -286,7 +287,14 @@ func (s *Server) filtersPage(w http.ResponseWriter, r *req) {
 		secs = append(secs, sec)
 	}
 	st, _ := s.App.St.Settings()
-	s.page(w, r, "filters", map[string]any{
+	ls, _ := s.App.St.Lists()
+	listRules := 0
+	for _, l := range ls {
+		if l.Enabled {
+			listRules += l.RuleCount
+		}
+	}
+	s.page(w, r, "filters", map[string]any{"ListCount": len(ls), "ListRules": listRules,
 		"Tier": tier, "Other": map[string]string{rules.TierHide: rules.TierBlock, rules.TierBlock: rules.TierHide}[tier],
 		"Scope": scope, "Q": q, "Sections": secs, "Categories": ytmeta.CategoryNames(), "Fields": rules.Fields,
 		"HasAPIKey": st.YouTubeAPIKey != "",
@@ -647,7 +655,7 @@ func (s *Server) reportSend(w http.ResponseWriter, r *req) {
 
 func (s *Server) settingsPage(w http.ResponseWriter, r *req) {
 	st, _ := s.App.St.Settings()
-	s.page(w, r, "settings", map[string]any{"S": st, "Host": r.Host})
+	s.page(w, r, "settings", map[string]any{"S": st, "Host": r.Host, "DefaultCatalog": core.DefaultCatalogURL()})
 }
 
 func (s *Server) settingsSave(w http.ResponseWriter, r *req) {
@@ -704,6 +712,14 @@ func (s *Server) settingsSave(w http.ResponseWriter, r *req) {
 	st.SessionDays = min(max(formInt(r, "session_days", 90), 1), 400)
 	st.UpdateCheck = r.FormValue("update_check") == "on"
 	st.AppScan = r.FormValue("app_scan") == "on"
+	if c := strings.TrimSpace(r.FormValue("catalog_url")); c == "" || c == core.DefaultCatalogURL() {
+		st.ListCatalogURL = ""
+	} else if err := filterlist.CheckURL(c); err != nil {
+		back(w, r, "/settings", "", fmt.Errorf("catalog address: %w", err))
+		return
+	} else {
+		st.ListCatalogURL = c
+	}
 	if err := s.App.St.SaveSettings(st); err != nil {
 		back(w, r, "/settings", "", err)
 		return

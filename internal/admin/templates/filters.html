@@ -5,6 +5,7 @@
   <a href="/filters?tier=hide&scope={{.D.Scope}}" class="{{if eq $tier "hide"}}on{{end}}">Hide <small>never shown</small></a>
   <a href="/filters?tier=block&scope={{.D.Scope}}" class="{{if eq $tier "block"}}on{{end}}">Block <small>shown, needs OK to play</small></a>
   <a href="/filters/overview?scope={{.D.Scope}}">Overview</a>
+  <a href="/filters/lists">Lists <small>shared filter lists</small></a>
 </div>
 <details class="card help">
   <summary>How filtering decides</summary>
@@ -16,6 +17,7 @@
   </ol>
   <p class="muted small">Examples: Block-Allow keyword “minecraft” + Hide-Deny keyword “creepy” → “Creepy Minecraft” is hidden. Hide-Allow a video + Block-Deny the same video → it shows up but needs your OK.</p>
 </details>
+{{if .D.ListCount}}<p class="muted small">Plus {{.D.ListRules}} entries from {{.D.ListCount}} subscribed <a href="/filters/lists">filter lists</a>. Your entries here win over a list's entry of the same type.</p>{{end}}
 <form class="row wrap card filterbar" method="get" action="/filters">
   <input type="hidden" name="tier" value="{{$tier}}">
   <label>Show rules for

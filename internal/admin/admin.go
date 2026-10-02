@@ -95,6 +95,13 @@ func (s *Server) Handler() http.Handler {
 	page("POST /kids/{id}/delete", s.kidDelete)
 	page("GET /filters", s.filtersPage)
 	page("GET /filters/overview", s.overviewPage)
+	page("GET /filters/lists", s.listsPage)
+	page("GET /filters/lists/export.txt", s.listExport)
+	page("GET /filters/lists/{id}", s.listEntries)
+	page("POST /filters/lists/subscribe", s.listSubscribe)
+	page("POST /filters/lists/{id}/options", s.listOptions)
+	page("POST /filters/lists/{id}/refresh", s.listRefresh)
+	page("POST /filters/lists/{id}/delete", s.listDelete)
 	page("POST /filters/add", s.filterAdd)
 	page("POST /filters/quick", s.filterQuick)
 	page("POST /filters/{id}/move", s.filterMove)
@@ -325,7 +332,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, se 
 
 var titles = map[string]string{
 	"login": "Log in", "dashboard": "Dashboard", "kids": "Kids", "kid": "Kid settings", "filters": "Filters",
-	"overview": "Filter overview", "tester": "Rule tester", "history": "History", "settings": "Settings",
+	"overview": "Filter overview", "lists": "Filter lists", "list": "Filter list", "tester": "Rule tester", "history": "History", "settings": "Settings",
 	"security": "Security", "token": "New API token",
 }
 
@@ -423,6 +430,14 @@ var funcs = template.FuncMap{
 	},
 	"weekday": func(i int) string { return time.Weekday(i).String() },
 	"list":    func(v ...string) []string { return v },
+	"has64": func(list []int64, v int64) bool {
+		for _, x := range list {
+			if x == v {
+				return true
+			}
+		}
+		return false
+	},
 	// qa builds the data for a quick-action button on the history page.
 	"qa": func(csrf string, kid int64, tier, list, typ, value, label, text string) map[string]any {
 		return map[string]any{"CSRF": csrf, "Kid": kid, "Tier": tier, "List": list, "Type": typ, "Value": value, "Label": label, "Text": text}

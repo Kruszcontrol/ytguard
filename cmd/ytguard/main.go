@@ -23,6 +23,7 @@ import (
 	"ytguard/internal/core"
 	"ytguard/internal/crx"
 	"ytguard/internal/extapi"
+	"ytguard/internal/filterlist"
 	"ytguard/internal/install"
 	"ytguard/internal/report"
 	"ytguard/internal/store"
@@ -41,6 +42,7 @@ Usage:
   ytguard serve [flags]           run the daemon (systemd does this)
   ytguard report --kid NAME [--day YYYY-MM-DD] [--send] [--html]
   ytguard policy                  print the Chrome policy JSON
+  ytguard list-check FILE...      check filter list files for mistakes
   ytguard version
 
 Most commands take --data DIR (default ` + install.DataDir + `).
@@ -80,6 +82,8 @@ func main() {
 		err = passwd(args)
 	case "report":
 		err = cmdReport(args)
+	case "list-check":
+		err = listCheck(os.Args[2:])
 	case "policy":
 		err = cmdPolicy(args)
 	case "version", "--version", "-v":
@@ -182,6 +186,42 @@ func cmdReport(args []string) error {
 	return nil
 }
 
+func listCheck(files []string) error {
+	if len(files) == 0 {
+		return errors.New("usage: ytguard list-check FILE...")
+	}
+	bad := 0
+	for _, f := range files {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			return err
+		}
+		l, err := filterlist.Parse(string(b))
+		switch {
+		case err != nil:
+			fmt.Printf("%s: %v\n", f, err)
+			bad++
+		case len(l.Warnings) > 0:
+			for _, w := range l.Warnings {
+				fmt.Printf("%s: %s\n", f, w)
+			}
+			bad++
+		default:
+			allow := 0
+			for _, r := range l.Rules {
+				if r.List == "allow" {
+					allow++
+				}
+			}
+			fmt.Printf("%s: OK — %q, %d entries (%d allow)\n", f, l.Meta.Title, len(l.Rules), allow)
+		}
+	}
+	if bad > 0 {
+		return fmt.Errorf("%d file(s) with problems", bad)
+	}
+	return nil
+}
+
 func cmdPolicy(args []string) error {
 	fs := flag.NewFlagSet("policy", flag.ExitOnError)
 	data := fs.String("data", install.DataDir, "data directory")
@@ -269,6 +309,7 @@ func serve(args []string) error {
 	go sched.Run(ctx)
 	go app.Updates.Run(ctx)
 	go app.RunAppMonitor(ctx, "/proc")
+	go app.RunListUpdater(ctx)
 	slog.Info("ytguard starting", "version", ytguard.Version, "repo", ytguard.Repo, "schema", store.SchemaVersion())
 	go func() {
 		t := time.NewTicker(6 * time.Hour)

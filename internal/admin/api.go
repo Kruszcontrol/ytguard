@@ -16,7 +16,7 @@ import (
 
 // REST API for Home Assistant and scripts. Bearer token auth with scopes:
 //
-//	read    GET  /api/v1/state, /api/v1/requests
+//	read    GET  /api/v1/state, /api/v1/requests, /api/v1/lists
 //	control POST /api/v1/kids/{kid}/bonus|lock|unlock|end-break, /api/v1/requests/{id}/approve|deny
 //	admin   GET/POST /api/v1/rules, DELETE /api/v1/rules/{id}
 //
@@ -28,6 +28,7 @@ func (s *Server) apiRoutes(mux *http.ServeMux) {
 	h := func(pattern, scope string, fn apiHandler) { mux.Handle(pattern, s.bearer(scope, fn)) }
 	h("GET /api/v1/state", auth.ScopeRead, s.apiState)
 	h("GET /api/v1/requests", auth.ScopeRead, s.apiRequests)
+	h("GET /api/v1/lists", auth.ScopeRead, s.apiLists)
 	h("POST /api/v1/kids/{kid}/{action}", auth.ScopeControl, s.apiKidAction)
 	h("POST /api/v1/requests/{id}/{action}", auth.ScopeControl, s.apiRequestAction)
 	h("GET /api/v1/rules", auth.ScopeAdmin, s.apiRules)

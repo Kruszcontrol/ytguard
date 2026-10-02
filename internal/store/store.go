@@ -122,6 +122,27 @@ var migrations = []func(tx *sql.Tx) error{
 			notified INTEGER NOT NULL DEFAULT 0, dismissed INTEGER NOT NULL DEFAULT 0)`)
 		return err
 	},
+	// 3: subscribed filter lists.
+	func(tx *sql.Tx) error {
+		for _, q := range []string{
+			`CREATE TABLE lists (
+				id INTEGER PRIMARY KEY, url TEXT NOT NULL UNIQUE,
+				title TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', ages TEXT NOT NULL DEFAULT '',
+				homepage TEXT NOT NULL DEFAULT '', license TEXT NOT NULL DEFAULT '', version TEXT NOT NULL DEFAULT '',
+				kids TEXT NOT NULL DEFAULT '', enabled INTEGER NOT NULL DEFAULT 1,
+				etag TEXT NOT NULL DEFAULT '', last_modified TEXT NOT NULL DEFAULT '',
+				fetched_at INTEGER NOT NULL DEFAULT 0, checked_at INTEGER NOT NULL DEFAULT 0, error TEXT NOT NULL DEFAULT '',
+				rule_count INTEGER NOT NULL DEFAULT 0, allow_count INTEGER NOT NULL DEFAULT 0, warnings TEXT NOT NULL DEFAULT '',
+				added_at INTEGER NOT NULL)`,
+			`ALTER TABLE rules ADD COLUMN list_id INTEGER NOT NULL DEFAULT 0`,
+			`CREATE INDEX rules_list ON rules(list_id)`,
+		} {
+			if _, err := tx.Exec(q); err != nil {
+				return err
+			}
+		}
+		return nil
+	},
 }
 
 // SchemaVersion is the schema version this build expects.
@@ -207,8 +228,9 @@ type Settings struct {
 	EmbedOrigins   string `json:"embedOrigins"`   // space separated origins allowed to frame the UI
 	SessionDays    int    `json:"sessionDays"`
 	PCName         string `json:"pcName"`
-	UpdateCheck    bool   `json:"updateCheck"` // check GitHub for new releases
-	AppScan        bool   `json:"appScan"`     // look for other browsers / video apps
+	UpdateCheck    bool   `json:"updateCheck"`    // check GitHub for new releases
+	AppScan        bool   `json:"appScan"`        // look for other browsers / video apps
+	ListCatalogURL string `json:"listCatalogURL"` // "" = this build's default catalog
 }
 
 // DefaultSettings for a fresh install.
@@ -380,7 +402,7 @@ func (s *Store) SaveKid(k *Kid) error {
 // DeleteKid removes a kid and their data.
 func (s *Store) DeleteKid(id int64) error {
 	for _, q := range []string{
-		`DELETE FROM kids WHERE id=?`, `DELETE FROM rules WHERE kid_id=?`, `DELETE FROM schedules WHERE kid_id=?`,
+		`DELETE FROM kids WHERE id=?`, `DELETE FROM rules WHERE kid_id=? AND list_id=0`, `DELETE FROM schedules WHERE kid_id=?`,
 		`DELETE FROM grants WHERE kid_id=?`, `DELETE FROM kid_state WHERE kid_id=?`, `DELETE FROM watch_log WHERE kid_id=?`,
 		`DELETE FROM events WHERE kid_id=?`, `DELETE FROM requests WHERE kid_id=?`, `DELETE FROM reports_sent WHERE kid_id=?`,
 	} {
@@ -388,7 +410,7 @@ func (s *Store) DeleteKid(id int64) error {
 			return err
 		}
 	}
-	return nil
+	return s.removeKidFromLists(id)
 }
 
 // ---- schedules ----
@@ -469,12 +491,16 @@ func (s *Store) BonusMinutes(kidID int64, day string) (int, error) {
 
 // ---- rules ----
 
-const ruleCols = `id, tier, list, type, value, extra, fields, match, kid_id, label, note`
+// ruleCols/ruleFrom select rules with the name of the list they came from.
+const (
+	ruleCols = `r.id, r.tier, r.list, r.type, r.value, r.extra, r.fields, r.match, r.kid_id, r.label, r.note, r.list_id, coalesce(l.title, '')`
+	ruleFrom = ` FROM rules r LEFT JOIN lists l ON l.id = r.list_id`
+)
 
 func scanRule(row interface{ Scan(...any) error }) (rules.Rule, error) {
 	var r rules.Rule
 	var fields string
-	err := row.Scan(&r.ID, &r.Tier, &r.List, &r.Type, &r.Value, &r.Extra, &fields, &r.Match, &r.KidID, &r.Label, &r.Note)
+	err := row.Scan(&r.ID, &r.Tier, &r.List, &r.Type, &r.Value, &r.Extra, &fields, &r.Match, &r.KidID, &r.Label, &r.Note, &r.Source, &r.SourceName)
 	if errors.Is(err, sql.ErrNoRows) {
 		return r, ErrNotFound
 	}
@@ -484,84 +510,81 @@ func scanRule(row interface{ Scan(...any) error }) (rules.Rule, error) {
 	return r, err
 }
 
+func scanRules(rows *sql.Rows, err error) ([]rules.Rule, error) {
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []rules.Rule
+	for rows.Next() {
+		r, err := scanRule(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
 // RuleFilter selects rules. Empty fields match anything; KidID -1 = any.
+// ListID 0 (the default) selects the parent's own rules; >0 a list's rules.
 type RuleFilter struct {
 	Tier, List, Type string
 	KidID            int64
+	ListID           int64
 	Search           string
 }
 
 // Rules lists rules matching f.
 func (s *Store) Rules(f RuleFilter) ([]rules.Rule, error) {
-	q := `SELECT ` + ruleCols + ` FROM rules WHERE 1=1`
-	var args []any
+	q := `SELECT ` + ruleCols + ruleFrom + ` WHERE r.list_id=?`
+	args := []any{f.ListID}
 	if f.Tier != "" {
-		q += ` AND tier=?`
+		q += ` AND r.tier=?`
 		args = append(args, f.Tier)
 	}
 	if f.List != "" {
-		q += ` AND list=?`
+		q += ` AND r.list=?`
 		args = append(args, f.List)
 	}
 	if f.Type != "" {
-		q += ` AND type=?`
+		q += ` AND r.type=?`
 		args = append(args, f.Type)
 	}
 	if f.KidID >= 0 {
-		q += ` AND kid_id=?`
+		q += ` AND r.kid_id=?`
 		args = append(args, f.KidID)
 	}
 	if f.Search != "" {
-		q += ` AND (value LIKE ? OR label LIKE ? OR extra LIKE ? OR note LIKE ?)`
+		q += ` AND (r.value LIKE ? OR r.label LIKE ? OR r.extra LIKE ? OR r.note LIKE ?)`
 		p := "%" + f.Search + "%"
 		args = append(args, p, p, p, p)
 	}
-	q += ` ORDER BY type, lower(coalesce(nullif(label,''), value))`
-	rows, err := s.DB.Query(q, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []rules.Rule
-	for rows.Next() {
-		r, err := scanRule(rows)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, r)
-	}
-	return out, rows.Err()
+	q += ` ORDER BY r.type, lower(coalesce(nullif(r.label,''), r.value))`
+	return scanRules(s.DB.Query(q, args...))
 }
 
-// RulesForKid returns the kid's own rules plus all-kids rules.
+// RulesForKid returns everything that applies to a kid: the parent's rules
+// for the kid and for all kids, plus rules from enabled lists the kid is
+// subscribed to.
 func (s *Store) RulesForKid(kidID int64) ([]rules.Rule, error) {
-	rows, err := s.DB.Query(`SELECT `+ruleCols+` FROM rules WHERE kid_id=0 OR kid_id=?`, kidID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []rules.Rule
-	for rows.Next() {
-		r, err := scanRule(rows)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, r)
-	}
-	return out, rows.Err()
+	return scanRules(s.DB.Query(`SELECT `+ruleCols+ruleFrom+`
+		WHERE (r.list_id=0 AND (r.kid_id=0 OR r.kid_id=?))
+		   OR (r.list_id>0 AND l.enabled=1 AND (l.kids='' OR (','||l.kids||',') LIKE ?))`,
+		kidID, fmt.Sprintf("%%,%d,%%", kidID)))
 }
 
 // Rule returns one rule.
 func (s *Store) Rule(id int64) (rules.Rule, error) {
-	return scanRule(s.DB.QueryRow(`SELECT `+ruleCols+` FROM rules WHERE id=?`, id))
+	return scanRule(s.DB.QueryRow(`SELECT `+ruleCols+ruleFrom+` WHERE r.id=?`, id))
 }
 
-// AddRule inserts r unless an identical rule (tier, list, type, value,
-// kid, match, fields) exists; returns the rule's ID either way.
+// AddRule inserts a parent rule unless an identical one (tier, list, type,
+// value, kid, match, fields) exists; returns the rule's ID either way.
 func (s *Store) AddRule(r *rules.Rule) (created bool, err error) {
 	fields := strings.Join(r.Fields, ",")
 	var id int64
-	err = s.DB.QueryRow(`SELECT id FROM rules WHERE tier=? AND list=? AND type=? AND value=? AND kid_id=? AND match=? AND fields=?`,
+	err = s.DB.QueryRow(`SELECT id FROM rules WHERE list_id=0 AND tier=? AND list=? AND type=? AND value=? AND kid_id=? AND match=? AND fields=?`,
 		r.Tier, r.List, r.Type, r.Value, r.KidID, r.Match, fields).Scan(&id)
 	if err == nil {
 		r.ID = id
@@ -575,25 +598,26 @@ func (s *Store) AddRule(r *rules.Rule) (created bool, err error) {
 	if err != nil {
 		return false, err
 	}
+	r.Source = 0
 	r.ID, _ = res.LastInsertId()
 	return true, nil
 }
 
-// UpdateRuleTierList moves a rule to another tier and/or list.
+// UpdateRuleTierList moves a parent rule to another tier and/or list.
 func (s *Store) UpdateRuleTierList(id int64, tier, list string) error {
-	_, err := s.DB.Exec(`UPDATE rules SET tier=?, list=? WHERE id=?`, tier, list, id)
+	_, err := s.DB.Exec(`UPDATE rules SET tier=?, list=? WHERE id=? AND list_id=0`, tier, list, id)
 	return err
 }
 
-// DeleteRule removes a rule.
+// DeleteRule removes a parent rule (list rules change only with the list).
 func (s *Store) DeleteRule(id int64) error {
-	_, err := s.DB.Exec(`DELETE FROM rules WHERE id=?`, id)
+	_, err := s.DB.Exec(`DELETE FROM rules WHERE id=? AND list_id=0`, id)
 	return err
 }
 
-// DeleteRulesWhere removes rules matching exactly (used when approving).
+// DeleteRulesWhere removes parent rules matching exactly (used when approving).
 func (s *Store) DeleteRulesWhere(tier, list, typ, value string, kidID int64) error {
-	_, err := s.DB.Exec(`DELETE FROM rules WHERE tier=? AND list=? AND type=? AND value=? AND kid_id=?`, tier, list, typ, value, kidID)
+	_, err := s.DB.Exec(`DELETE FROM rules WHERE list_id=0 AND tier=? AND list=? AND type=? AND value=? AND kid_id=?`, tier, list, typ, value, kidID)
 	return err
 }
 

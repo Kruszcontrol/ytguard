@@ -15,7 +15,7 @@
   {{if $.D.Partial}}<p class="flash warn">Couldn't fetch full details for this video, so description/tag/category rules weren't checked.</p>{{end}}
 </div>
 {{end}}{{end}}
-{{range .D.Results}}
+{{range $r := .D.Results}}
 <div class="card">
   <div class="row between">
     <h2>{{.Kid.Name}}</h2>
@@ -29,6 +29,20 @@
     {{with .Decision.Block}}<tr><td>Block</td><td><span class="tag {{.Verdict}}">{{.Verdict}}</span></td><td>{{.Reason}}</td></tr>
     {{else}}<tr><td>Block</td><td colspan="2" class="muted">Not checked — Hide tier already decided.</td></tr>{{end}}
   </table>
+  {{if ne .Decision.Outcome "play"}}{{with $.D.Meta}}
+  {{$tier := "block"}}{{if eq $r.Decision.Outcome "hide"}}{{$tier = "hide"}}{{end}}
+  <div class="actions">
+    <span class="small muted">Override for {{$r.Kid.Name}}:</span>
+    <form method="post" action="/filters/quick" class="inline"><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="kid" value="{{$r.Kid.ID}}">
+      <input type="hidden" name="tier" value="{{$tier}}"><input type="hidden" name="list" value="allow"><input type="hidden" name="type" value="video">
+      <input type="hidden" name="value" value="{{.VideoID}}"><input type="hidden" name="label" value="{{.Title}}"><input type="hidden" name="from" value="tester">
+      <button class="small okbtn">Allow this video</button></form>
+    {{if .ChannelID}}<form method="post" action="/filters/quick" class="inline"><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="kid" value="{{$r.Kid.ID}}">
+      <input type="hidden" name="tier" value="{{$tier}}"><input type="hidden" name="list" value="allow"><input type="hidden" name="type" value="channel">
+      <input type="hidden" name="value" value="{{.ChannelID}}"><input type="hidden" name="label" value="{{.ChannelName}}"><input type="hidden" name="from" value="tester">
+      <button class="small okbtn">Allow this channel</button></form>{{end}}
+  </div>
+  {{end}}{{end}}
   {{if .Decision.Hide.Unchecked}}<p class="muted small">Couldn't check: {{join .Decision.Hide.Unchecked "; "}}</p>{{end}}
 </div>
 {{end}}

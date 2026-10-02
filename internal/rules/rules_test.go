@@ -203,6 +203,50 @@ func TestEvaluate(t *testing.T) {
 			meta: full,
 			want: Play,
 		},
+		{
+			name: "parent allow beats list deny at the same level",
+			policy: Policy{KidID: kid, Rules: []Rule{
+				{Tier: TierHide, List: ListDeny, Type: TypeKeyword, Value: "creepy", Match: MatchWord, Source: 5, SourceName: "Scary"},
+				{Tier: TierHide, List: ListAllow, Type: TypeKeyword, Value: "creepy", Match: MatchWord},
+			}},
+			meta: full,
+			want: Play,
+		},
+		{
+			name: "list deny at a more specific level beats parent allow keyword",
+			policy: Policy{KidID: kid, Rules: []Rule{
+				{Tier: TierHide, List: ListDeny, Type: TypeChannel, Value: "UCabc", Source: 5},
+				kw(TierHide, ListAllow, "minecraft"),
+			}},
+			meta: full,
+			want: Hide,
+		},
+		{
+			name: "parent allow channel beats list deny channel",
+			policy: Policy{KidID: kid, Rules: []Rule{
+				{Tier: TierBlock, List: ListDeny, Type: TypeChannel, Value: "UCabc", Source: 5},
+				{Tier: TierBlock, List: ListAllow, Type: TypeChannel, Value: "UCabc", KidID: kid},
+			}},
+			meta: full,
+			want: Play,
+		},
+		{
+			name: "list allow does not beat parent deny",
+			policy: Policy{KidID: kid, Rules: []Rule{
+				{Tier: TierBlock, List: ListAllow, Type: TypeChannel, Value: "UCabc", Source: 5},
+				{Tier: TierBlock, List: ListDeny, Type: TypeChannel, Value: "UCabc"},
+			}},
+			meta: full,
+			want: Block,
+		},
+		{
+			name: "list rules apply when nothing of the parent's matches",
+			policy: Policy{KidID: kid, Rules: []Rule{
+				{Tier: TierBlock, List: ListDeny, Type: TypeCategory, Value: "Gaming", Source: 5},
+			}},
+			meta: full,
+			want: Block,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

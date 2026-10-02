@@ -5,9 +5,10 @@
 //
 //	video → channel → keyword → category → attribute → tier default
 //
-// Within a level, rules scoped to the kid are checked before rules for all
-// kids, and within a scope Deny beats Allow. The first level that produces a
-// verdict decides the tier.
+// Within a level, the parent's rules for the kid come first, then the
+// parent's rules for all kids, then rules from subscribed filter lists; within
+// each group Deny beats Allow. The first level that produces a verdict
+// decides the tier.
 //
 // The Hide tier is evaluated first. Hidden videos never appear to the kid.
 // Otherwise the Block tier decides whether the video plays or is blocked
@@ -75,6 +76,10 @@ type Rule struct {
 	KidID  int64    `json:"kid_id"`           // 0 = all kids
 	Label  string   `json:"label,omitempty"`  // human name (video title, channel name)
 	Note   string   `json:"note,omitempty"`
+	// Source is the subscribed filter list the rule came from (0 = the
+	// parent's own rule). Parent rules beat list rules at the same level.
+	Source     int64  `json:"source,omitempty"`
+	SourceName string `json:"sourceName,omitempty"`
 }
 
 // Describe returns a short parent-facing description of the rule.
@@ -97,6 +102,9 @@ func (r Rule) Describe() string {
 	scope := "all kids"
 	if r.KidID != 0 {
 		scope = "this kid"
+	}
+	if r.Source != 0 {
+		scope = "list " + strconv.Quote(r.SourceName)
 	}
 	return fmt.Sprintf("%s/%s: %s (%s)", title(r.Tier), r.List, what, scope)
 }
@@ -228,6 +236,20 @@ func Evaluate(p Policy, m Meta) Decision {
 	return d
 }
 
+// ruleGroup orders rules within a level: 0 parent/kid, 1 parent/all kids,
+// 2 subscribed list, -1 not applicable to this kid.
+func ruleGroup(r *Rule, kidID int64) int {
+	switch {
+	case r.Source != 0:
+		return 2
+	case r.KidID == 0:
+		return 1
+	case r.KidID == kidID:
+		return 0
+	}
+	return -1
+}
+
 func defaultOr(s string) string {
 	if s == ListDeny {
 		return ListDeny
@@ -238,15 +260,13 @@ func defaultOr(s string) string {
 func evaluateTier(p Policy, tier, def string, m Meta) TierResult {
 	res := TierResult{Tier: tier}
 	for _, level := range Levels {
-		// Kid-scoped rules first, then rules for all kids.
-		for _, kidScoped := range []bool{true, false} {
+		// The parent's rules for this kid, then the parent's rules for all
+		// kids, then subscribed lists.
+		for group := 0; group < 3; group++ {
 			var allow, deny *Rule
 			for i := range p.Rules {
 				r := &p.Rules[i]
-				if r.Tier != tier || r.Type != level || (r.KidID != 0) != kidScoped {
-					continue
-				}
-				if kidScoped && r.KidID != p.KidID {
+				if r.Tier != tier || r.Type != level || ruleGroup(r, p.KidID) != group {
 					continue
 				}
 				ok, known := Matches(*r, m)
