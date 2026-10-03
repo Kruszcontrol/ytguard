@@ -8,7 +8,7 @@ Family YouTube controls for Linux Mint (or any systemd Linux) + Google Chrome.
 - **Time controls** per kid and weekday: daily minutes, allowed hours, enforced breaks (e.g. every 20 min watching → 10 min pause), bonus time, pause now.
 - **Approval requests**: the kid taps "Ask a parent"; you approve the video or its whole channel from the web UI or a Home Assistant phone notification.
 - **Daily report** per kid of every video watched, plus blocked/hidden attempts, by **email** and/or **Home Assistant**.
-- **Remote web UI** on each PC (HTTPS, app password, "remember this device").
+- **Remote web UI** on each PC (HTTPS, app password, "remember this device"), built for phones and desktops, with themes: Light, Dark, Match device, Ocean, Sunset and Forest.
 - **Home Assistant**: over MQTT, each PC and each kid appear automatically as devices (time used/left, watching now, pause switch, +time buttons, update notices). A ready-made blueprint sends approval requests to your phone with Allow/Deny buttons, for every PC. A webhook and a REST API with scoped tokens are there as an alternative.
 
 ## How it works

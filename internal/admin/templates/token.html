@@ -1,7 +1,7 @@
 {{define "content"}}
-<h1>API token created</h1>
+<div class="page-head"><div><h1>API token created</h1></div></div>
 <div class="card">
-  <p>Token <b>{{.D.Name}}</b>. Copy it now — it won't be shown again.</p>
+  <div class="flash warn">{{icon "alert"}}<div class="grow">Token <b>{{.D.Name}}</b>: copy it now — it won't be shown again.</div></div>
   <p><input readonly value="{{.D.Token}}" class="mono grow" data-select></p>
   <p class="muted small">Use it as <code>Authorization: Bearer &lt;token&gt;</code>. Test from a terminal:</p>
   <pre>curl -k -H "Authorization: Bearer {{.D.Token}}" {{.D.Base}}/api/v1/state</pre>

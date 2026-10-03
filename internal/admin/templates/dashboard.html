@@ -1,93 +1,126 @@
 {{define "content"}}
-{{with .Update}}{{if .Available}}<div class="flash warn">
-  <b>YTGuard {{.Latest}} is available</b> (this PC has {{.Current}}).
-  {{if .URL}}<a href="{{.URL}}" target="_blank" rel="noopener">What's new</a>.{{end}}
-  To update, an adult runs this on {{$.PCName}}: <code>sudo ytguard upgrade</code>
-</div>{{end}}{{end}}
-{{range .D.Warnings}}<div class="flash warn">{{.}}</div>{{end}}
-<div class="grid">
-{{range .D.States}}
-{{$k := .Kid}}{{$s := .Status}}
-<section class="card kid">
-  <div class="row between">
-    <h2>{{$k.Name}}</h2>
-    {{if .WatchingNow}}{{if $s.Allowed}}<span class="pill live">Watching now</span>{{end}}{{end}}
-    {{if eq $s.Reason "break"}}<span class="pill warn">Break until {{clock $s.BreakUntil}}</span>
-    {{else if eq $s.Reason "locked"}}<span class="pill bad">Paused until {{clock $s.LockedUntil}}</span>
-    {{else if eq $s.Reason "time_up"}}<span class="pill bad">Time's up</span>
-    {{else if eq $s.Reason "outside_window"}}<span class="pill muted">Outside hours{{if $s.NextOpen}} · opens {{$s.NextOpen}}{{end}}</span>
-    {{else if eq $s.Reason "none_today"}}<span class="pill muted">No YouTube today</span>
-    {{else if not .WatchingNow}}<span class="pill ok">Available</span>{{end}}
+<div class="page-head">
+  <div>
+    <h1>Dashboard</h1>
+    <p>{{if .PCName}}{{.PCName}} · {{end}}{{len .D.States}} {{if eq (len .D.States) 1}}kid{{else}}kids{{end}}</p>
   </div>
-  <p class="big">{{mins $s.UsedSec}} <span class="muted">used{{if ge $s.LimitSec 0}} of {{mins $s.LimitSec}}{{end}}</span></p>
-  {{if ge $s.LimitSec 0}}<div class="bar"><span style="width:{{pct $s.UsedSec $s.LimitSec}}%"></span></div>{{end}}
-  <p class="muted small">
-    {{if ge $s.RemainingSec 0}}{{mins $s.RemainingSec}} left · {{end}}
-    {{if ge $s.BreakInSec 0}}break in {{mins $s.BreakInSec}} · {{end}}
-    {{.TodayVideos}} videos today
-  </p>
-  {{with .LastVideo}}
-  <a class="video" href="{{watch .VideoID}}" target="_blank" rel="noopener">
-    <img src="{{thumb .VideoID}}" alt="" loading="lazy">
-    <span><b>{{.Title}}</b><br><span class="muted small">{{.ChannelName}} · last seen {{clock .LastSeen}}</span></span>
-  </a>
-  {{end}}
-  <div class="actions">
-    {{range $m := list "15" "30" "60"}}
-    <form method="post" action="/kids/{{$k.ID}}/bonus"><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="minutes" value="{{$m}}"><button>+{{$m}} min</button></form>
-    {{end}}
-    {{if eq $s.Reason "locked"}}
-    <form method="post" action="/kids/{{$k.ID}}/unlock"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button>Unpause</button></form>
-    {{else}}
-    <form method="post" action="/kids/{{$k.ID}}/lock"><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="minutes" value="60"><button>Pause 1 h</button></form>
-    <form method="post" action="/kids/{{$k.ID}}/lock"><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="minutes" value="0"><button>Pause today</button></form>
-    {{end}}
-    {{if eq $s.Reason "break"}}<form method="post" action="/kids/{{$k.ID}}/endbreak"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button>End break</button></form>{{end}}
-    <form method="post" action="/kids/{{$k.ID}}/reset" data-confirm="Reset {{$k.Name}}'s used time for today to zero?"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="ghost">Reset today</button></form>
-  </div>
-  <p class="small"><a href="/history?kid={{$k.ID}}">Today's history →</a></p>
-</section>
-{{end}}
 </div>
 
+{{with .Update}}{{if .Available}}
+<div class="flash info">{{icon "arrow-up"}}<div class="grow">
+  <b>YTGuard {{.Latest}} is available</b> (this PC has {{.Current}}).
+  {{if .URL}}<a href="{{.URL}}" target="_blank" rel="noopener">What's new</a> · {{end}}To update, an adult runs <code>sudo ytguard upgrade</code> on {{$.PCName}}.
+</div></div>
+{{end}}{{end}}
+{{range .D.Warnings}}<div class="flash warn">{{icon "info"}}<div class="grow">{{.}}</div></div>{{end}}
+
+{{if .D.Pending}}
+<section class="card attention">
+  <div class="card-head">
+    <h2>{{icon "bell"}} Waiting for you <span class="count">{{len .D.Pending}}</span></h2>
+    <p>Your kids asked to watch these. Allowing a video (or its whole channel) lets it play right away.</p>
+  </div>
+  {{range .D.Pending}}
+  <div class="request">
+    <a class="video" href="{{watch .VideoID}}" target="_blank" rel="noopener">
+      <img src="{{thumb .VideoID}}" alt="" loading="lazy">
+      <span><b>{{.Title}}</b>
+        <span class="muted small">{{.ChannelName}} · <b>{{.KidName}}</b> asked {{datetime .CreatedAt}}</span>
+        {{if .Message}}<br><span class="quote">“{{.Message}}”</span>{{end}}
+        <br><span class="muted small">Blocked by: {{.Reason}}</span></span>
+    </a>
+    <div class="actions">
+      <form method="post" action="/requests/{{.ID}}/approve"><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="scope" value="video"><button class="okbtn">{{icon "check"}} Allow video</button></form>
+      {{if .ChannelID}}<form method="post" action="/requests/{{.ID}}/approve"><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="scope" value="channel"><button>{{icon "check"}} Allow channel</button></form>{{end}}
+      <form method="post" action="/requests/{{.ID}}/deny"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="danger">{{icon "x"}} Deny</button></form>
+    </div>
+  </div>
+  {{end}}
+</section>
+{{end}}
+
 {{with .D.Findings}}
-<section class="card">
-  <h2>Other browsers &amp; video apps <span class="pill bad">{{len .}}</span></h2>
-  <p class="muted small">YTGuard only controls Chrome. These could be used to watch YouTube without limits. YTGuard can't remove them —
-    see “Other browsers” in the README for how. Dismiss anything you're fine with.</p>
+<section class="card attention">
+  <div class="card-head">
+    <h2>{{icon "globe"}} Other browsers &amp; video apps <span class="count">{{len .}}</span></h2>
+    <p>YTGuard only controls Chrome — these could be used to watch YouTube without limits. YTGuard can't remove them (see “Other browsers” in the README). Dismiss anything you're fine with.</p>
+  </div>
+  <div class="scroll">
   <table class="list">
     <tr><th>Who</th><th>App</th><th>What</th><th>Where</th><th>Seen</th><th></th></tr>
     {{range .}}
     <tr>
       <td>{{.Kid}}</td>
       <td><b>{{.App}}</b></td>
-      <td>{{if .Running}}<span class="pill bad">running now</span><br>{{else if eq .Kind "running"}}was running ·{{end}} <span class="muted small">{{.How}}</span></td>
-      <td><code class="small">{{.Location}}</code></td>
+      <td>{{if .Running}}<span class="pill bad">{{icon "play"}} running now</span><br>{{else if eq .Kind "running"}}was running · {{end}}<span class="muted small">{{.How}}</span></td>
+      <td><code class="small mono">{{.Location}}</code></td>
       <td class="small">{{datetime .FirstSeen}}{{if ne .FirstSeen .LastSeen}} – {{clock .LastSeen}}{{end}}</td>
       <td><form method="post" action="/findings/dismiss"><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="key" value="{{.Key}}"><button class="ghost small">Dismiss</button></form></td>
     </tr>
     {{end}}
   </table>
+  </div>
 </section>
 {{end}}
 
-<section class="card">
-  <h2>Requests {{if .D.Pending}}<span class="pill warn">{{len .D.Pending}}</span>{{end}}</h2>
-  {{if not .D.Pending}}<p class="muted">No pending requests. When a kid hits a blocked video they can ask for it here.</p>{{end}}
-  {{range .D.Pending}}
-  <div class="request">
-    <a class="video" href="{{watch .VideoID}}" target="_blank" rel="noopener">
+{{if .D.States}}<div class="section-title">{{icon "users"}} Kids</div>{{end}}
+<div class="grid">
+{{range .D.States}}
+{{$k := .Kid}}{{$s := .Status}}
+<section class="card kid">
+  {{if eq $s.Reason "break"}}<div class="kid-banner s-warn"><h2>{{$k.Name}}</h2><span class="state">{{icon "coffee"}} On a break until {{clock $s.BreakUntil}}</span></div>
+  {{else if eq $s.Reason "locked"}}<div class="kid-banner s-bad"><h2>{{$k.Name}}</h2><span class="state">{{icon "pause"}} Paused until {{clock $s.LockedUntil}}</span></div>
+  {{else if eq $s.Reason "time_up"}}<div class="kid-banner s-bad"><h2>{{$k.Name}}</h2><span class="state">{{icon "timer"}} Time's up</span></div>
+  {{else if eq $s.Reason "outside_window"}}<div class="kid-banner s-muted"><h2>{{$k.Name}}</h2><span class="state">{{icon "clock"}} Outside hours{{if $s.NextOpen}} · opens {{$s.NextOpen}}{{end}}</span></div>
+  {{else if eq $s.Reason "none_today"}}<div class="kid-banner s-muted"><h2>{{$k.Name}}</h2><span class="state">{{icon "x"}} No YouTube today</span></div>
+  {{else if .WatchingNow}}<div class="kid-banner s-live"><h2>{{$k.Name}}</h2><span class="state">{{icon "play"}} Watching now</span></div>
+  {{else}}<div class="kid-banner s-ok"><h2>{{$k.Name}}</h2><span class="state">{{icon "check"}} Available</span></div>{{end}}
+  <div class="kid-body">
+    <div class="stats">
+      <div class="stat"><span>Used</span><b>{{mins $s.UsedSec}}</b></div>
+      <div class="stat"><span>Left</span><b>{{if ge $s.RemainingSec 0}}{{mins $s.RemainingSec}}{{else}}∞{{end}}</b></div>
+      <div class="stat"><span>Videos</span><b>{{.TodayVideos}}</b></div>
+    </div>
+    {{if ge $s.LimitSec 0}}{{$p := pct $s.UsedSec $s.LimitSec}}
+    <div><div class="bar {{level $p}}"><span style="width:{{$p}}%"></span></div>
+      <div class="muted small" style="margin-top:.3rem">{{$p}}% of {{mins $s.LimitSec}} today{{if ge $s.BreakInSec 0}} · break in {{mins $s.BreakInSec}}{{end}}</div></div>
+    {{else if ge $s.BreakInSec 0}}<div class="muted small">No daily limit · break in {{mins $s.BreakInSec}}</div>
+    {{else if $k.Options.TimeLimitsOff}}<div class="muted small">Time limits are off</div>{{end}}
+    {{with .LastVideo}}
+    <a class="video now" href="{{watch .VideoID}}" target="_blank" rel="noopener">
       <img src="{{thumb .VideoID}}" alt="" loading="lazy">
-      <span><b>{{.Title}}</b><br><span class="muted small">{{.ChannelName}} · {{.KidName}} asked {{datetime .CreatedAt}}</span>
-      {{if .Message}}<br><i>“{{.Message}}”</i>{{end}}
-      <br><span class="muted small">Blocked by: {{.Reason}}</span></span>
+      <span><b>{{.Title}}</b><span class="muted small">{{.ChannelName}} · last seen {{clock .LastSeen}}</span></span>
     </a>
-    <div class="actions">
-      <form method="post" action="/requests/{{.ID}}/approve"><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="scope" value="video"><button class="primary">Allow video</button></form>
-      {{if .ChannelID}}<form method="post" action="/requests/{{.ID}}/approve"><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="scope" value="channel"><button>Allow channel</button></form>{{end}}
-      <form method="post" action="/requests/{{.ID}}/deny"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="ghost">Deny</button></form>
+    {{end}}
+    <div class="kid-actions">
+      <span class="btn-group">
+        {{range $m := list "15" "30" "60"}}
+        <form method="post" action="/kids/{{$k.ID}}/bonus"><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="minutes" value="{{$m}}"><button class="small">{{icon "plus"}}{{$m}} min</button></form>
+        {{end}}
+      </span>
+      {{if eq $s.Reason "locked"}}
+      <form method="post" action="/kids/{{$k.ID}}/unlock"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="small okbtn">{{icon "play"}} Unpause</button></form>
+      {{else}}
+      <form method="post" action="/kids/{{$k.ID}}/lock"><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="minutes" value="60"><button class="small danger">{{icon "pause"}} Pause 1 h</button></form>
+      <form method="post" action="/kids/{{$k.ID}}/lock"><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="minutes" value="0"><button class="small danger">{{icon "pause"}} Pause today</button></form>
+      {{end}}
+      {{if eq $s.Reason "break"}}<form method="post" action="/kids/{{$k.ID}}/endbreak"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="small okbtn">{{icon "coffee"}} End break</button></form>{{end}}
+    </div>
+    <div class="row between small">
+      <a href="/history?kid={{$k.ID}}">{{icon "clock"}} Today's history</a>
+      <form method="post" action="/kids/{{$k.ID}}/reset" data-confirm="Reset {{$k.Name}}'s used time for today to zero?"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="link small">Reset today's time</button></form>
     </div>
   </div>
-  {{end}}
 </section>
+{{else}}
+<section class="card"><div class="empty">{{icon "users"}} No kids set up yet. <a href="/kids">Add one</a>.</div></section>
+{{end}}
+</div>
+
+{{if not .D.Pending}}
+<section class="card">
+  <h2>{{icon "bell"}} Requests</h2>
+  <div class="empty">{{icon "check"}} Nothing waiting. When a kid hits a blocked video they can ask for it, and it shows up here.</div>
+</section>
+{{end}}
 {{end}}

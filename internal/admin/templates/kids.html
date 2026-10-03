@@ -1,29 +1,32 @@
 {{define "content"}}
-<h1>Kids</h1>
-<p class="muted">Each kid is matched to their Linux login on this PC. Other Linux users (parents) are not filtered unless you change that in Settings.</p>
-<div class="card">
-  <table class="list">
-    <tr><th>Name</th><th>Linux user</th><th>Hide default</th><th>Block default</th><th>Shorts</th><th></th></tr>
-    {{range .Kids}}
-    <tr><td><a href="/kids/{{.ID}}">{{.Name}}</a></td><td><code>{{.LinuxUser}}</code></td>
-      <td>{{if eq .HideDefault "deny"}}hide unknown{{else}}show unknown{{end}}</td>
-      <td>{{if eq .BlockDefault "deny"}}block unknown{{else}}play unknown{{end}}</td>
-      <td>{{with .Options.ShortsMode}}{{if eq . "filter"}}follow filters{{else}}{{.}} all{{end}}{{end}}</td>
-      <td><a href="/kids/{{.ID}}">Edit</a></td></tr>
-    {{else}}<tr><td colspan="6" class="muted">No kids yet.</td></tr>{{end}}
-  </table>
+<div class="page-head"><div><h1>Kids</h1><p>Each kid is matched to their Linux login on this PC. Other accounts (yours) aren't filtered unless you change that in Settings.</p></div></div>
+<div class="grid">
+{{range .Kids}}
+<a class="card kid-link" href="/kids/{{.ID}}">
+  <div class="row between"><h2>{{icon "user"}} {{.Name}}</h2><span class="muted">{{icon "arrow-right"}}</span></div>
+  <div class="row wrap small">
+    <span class="chip">{{.LinuxUser}}</span>
+    <span class="pill {{if eq .HideDefault "deny"}}bad{{end}}">{{if eq .HideDefault "deny"}}hides unknown{{else}}shows unknown{{end}}</span>
+    <span class="pill {{if eq .BlockDefault "deny"}}warn{{end}}">{{if eq .BlockDefault "deny"}}blocks unknown{{else}}plays unknown{{end}}</span>
+    {{with .Options.ShortsMode}}{{if ne . "filter"}}<span class="pill bad">Shorts: {{.}}</span>{{end}}{{end}}
+    {{if .Options.TimeLimitsOff}}<span class="pill">no time limits</span>{{end}}
+  </div>
+</a>
+{{else}}
+<div class="card"><div class="empty">{{icon "users"}} No kids yet — add one below.</div></div>
+{{end}}
 </div>
-<div class="card">
-  <h2>Add a kid</h2>
-  <form method="post" action="/kids" class="row wrap">
+<section class="card">
+  <div class="card-head"><h2>{{icon "plus"}} Add a kid</h2><p>Pick the Linux account the kid logs in with. They need a standard (non-admin) account.</p></div>
+  <form method="post" action="/kids" class="row wrap filterbar">
     <input type="hidden" name="csrf" value="{{.CSRF}}">
-    <label>Linux user
+    <label>Linux account
       <select name="linux_user" required>
-        {{range .D.FreeUsers}}<option>{{.}}</option>{{else}}<option value="">(no unassigned users)</option>{{end}}
+        {{range .D.FreeUsers}}<option>{{.}}</option>{{else}}<option value="">(no unassigned accounts)</option>{{end}}
       </select>
     </label>
-    <label>Name <input name="name" required maxlength="40"></label>
-    <button class="primary">Add</button>
+    <label>Name <input name="name" required maxlength="40" placeholder="e.g. Alice"></label>
+    <button class="primary">{{icon "plus"}} Add kid</button>
   </form>
-</div>
+</section>
 {{end}}

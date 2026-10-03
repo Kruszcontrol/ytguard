@@ -5,7 +5,9 @@ package admin
 
 import (
 	"bufio"
+	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/hex"
 	"embed"
 	"errors"
 	"fmt"
@@ -55,6 +57,21 @@ type Server struct {
 	pages map[string]*template.Template
 }
 
+// assetVersion fingerprints the embedded static files, so browsers fetch
+// new copies after an upgrade instead of using cached old ones.
+var assetVersion = func() string {
+	h := sha256.New()
+	_ = fs.WalkDir(staticFS, "static", func(p string, d fs.DirEntry, err error) error {
+		if err == nil && !d.IsDir() {
+			b, _ := staticFS.ReadFile(p)
+			h.Write([]byte(p))
+			h.Write(b)
+		}
+		return nil
+	})
+	return hex.EncodeToString(h.Sum(nil))[:10]
+}()
+
 // New parses templates.
 func New(app *core.App, a *auth.Auth) (*Server, error) {
 	s := &Server{App: app, Auth: a, pages: map[string]*template.Template{}}
@@ -82,6 +99,7 @@ func (s *Server) Handler() http.Handler {
 	static, _ := fs.Sub(staticFS, "static")
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(static))))
 	mux.HandleFunc("GET /login", s.loginPage)
+	mux.HandleFunc("GET /theme/{name}", s.setTheme)
 	mux.HandleFunc("POST /login", s.loginPost)
 
 	page := func(pattern string, h pageHandler) { mux.Handle(pattern, s.session(h)) }
@@ -153,6 +171,10 @@ func (s *Server) headers(next http.Handler) http.Handler {
 		h.Set("Strict-Transport-Security", "max-age=31536000")
 		if !strings.HasPrefix(r.URL.Path, "/static/") {
 			h.Set("Cache-Control", "no-store")
+		} else if r.URL.Query().Get("v") == assetVersion {
+			h.Set("Cache-Control", "public, max-age=31536000, immutable")
+		} else {
+			h.Set("Cache-Control", "no-cache")
 		}
 		next.ServeHTTP(w, r)
 	})
@@ -303,9 +325,60 @@ func guessDevice(ua string) string {
 	return os
 }
 
+// ---- themes ----
+
+type themeInfo struct {
+	ID, Name string
+	Swatch   template.CSS // constant values below, safe for a style attribute
+}
+
+// themes are defined in static/style.css; the choice is a per-device cookie.
+var themes = []themeInfo{
+	{"system", "Match device", "linear-gradient(135deg,#f4f6fb 50%,#161b24 50%)"},
+	{"light", "Light", "#f4f6fb"},
+	{"dark", "Dark", "#161b24"},
+	{"ocean", "Ocean", "linear-gradient(135deg,#0b2c44,#22d3ee)"},
+	{"sunset", "Sunset", "linear-gradient(135deg,#ff8a3d,#d6336c)"},
+	{"forest", "Forest", "linear-gradient(135deg,#16251c,#84cc16)"},
+}
+
+const themeCookie = "ytg_theme"
+
+func themeOf(r *http.Request) string {
+	if c, err := r.Cookie(themeCookie); err == nil {
+		for _, t := range themes {
+			if t.ID == c.Value {
+				return t.ID
+			}
+		}
+	}
+	return "system"
+}
+
+// setTheme remembers the theme on this device (no login needed: it's
+// only a display preference).
+func (s *Server) setTheme(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	for _, t := range themes {
+		if t.ID == name {
+			http.SetCookie(w, &http.Cookie{Name: themeCookie, Value: name, Path: "/", MaxAge: 5 * 365 * 24 * 3600,
+				Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode})
+		}
+	}
+	next := "/"
+	if ref := r.Header.Get("Referer"); ref != "" {
+		if u, err := url.Parse(ref); err == nil && u.Host == r.Host {
+			next = safeNext(u.RequestURI())
+		}
+	}
+	http.Redirect(w, r, next, http.StatusSeeOther)
+}
+
 // ---- rendering ----
 
 type pageData struct {
+	Theme   string
+	Themes  []themeInfo
 	Title   string
 	Active  string
 	CSRF    string
@@ -314,6 +387,7 @@ type pageData struct {
 	PCName  string
 	Version string
 	Kids    []store.Kid
+	Pending int // approval requests waiting (nav badge)
 	Update  update.Status
 	D       any
 }
@@ -326,10 +400,13 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, se 
 	}
 	st, _ := s.App.St.Settings()
 	kids, _ := s.App.St.Kids()
-	pd := pageData{Title: titles[name], Active: name, PCName: st.PCName, Version: ytguard.Version, Kids: kids, D: d, Update: s.App.Updates.Status(),
+	pd := pageData{Theme: themeOf(r), Themes: themes, Title: titles[name], Active: name, PCName: st.PCName, Version: ytguard.Version, Kids: kids, D: d, Update: s.App.Updates.Status(),
 		Msg: r.URL.Query().Get("msg"), Err: r.URL.Query().Get("err")}
 	if se != nil {
 		pd.CSRF = se.CSRF
+		if rs, err := s.App.St.Requests(store.RequestPending, 100); err == nil {
+			pd.Pending = len(rs)
+		}
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := t.Execute(w, pd); err != nil {
@@ -437,6 +514,21 @@ var funcs = template.FuncMap{
 	},
 	"weekday": func(i int) string { return time.Weekday(i).String() },
 	"list":    func(v ...string) []string { return v },
+	"asset":   func(p string) string { return "/static/" + p + "?v=" + assetVersion },
+	// icon renders an SVG icon from static/icons.svg.
+	"icon": func(name string) template.HTML {
+		return template.HTML(`<svg class="i" aria-hidden="true"><use href="/static/icons.svg?v=` + assetVersion + `#` + template.HTMLEscapeString(name) + `"></use></svg>`)
+	},
+	// level turns a percentage into ok / warn / bad for colouring bars.
+	"level": func(pct int) string {
+		switch {
+		case pct >= 90:
+			return "bad"
+		case pct >= 70:
+			return "warn"
+		}
+		return "ok"
+	},
 	"has64": func(list []int64, v int64) bool {
 		for _, x := range list {
 			if x == v {

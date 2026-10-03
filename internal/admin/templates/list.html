@@ -1,7 +1,6 @@
 {{define "content"}}
 {{$l := .D.L}}
-<p><a href="/filters/lists">← Lists</a></p>
-<h1>{{$l.Title}} {{if $l.Ages}}<span class="chip">ages {{$l.Ages}}</span>{{end}}</h1>
+<div class="page-head"><div><p class="small"><a href="/filters/lists">← Shared lists</a></p><h1>{{$l.Title}} {{if $l.Ages}}<span class="chip">ages {{$l.Ages}}</span>{{end}}</h1></div></div>
 <div class="card">
   <p>{{$l.Description}}</p>
   <p class="small muted">{{$l.RuleCount}} entries{{if $l.AllowCount}} ({{$l.AllowCount}} allow){{end}} · for {{$l.AppliesTo}} ·

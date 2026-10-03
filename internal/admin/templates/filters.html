@@ -1,14 +1,21 @@
 {{define "content"}}
 {{$tier := .D.Tier}}{{$csrf := .CSRF}}{{$kids := .Kids}}
-<h1>Filters</h1>
-<div class="tabs">
-  <a href="/filters?tier=hide&scope={{.D.Scope}}" class="{{if eq $tier "hide"}}on{{end}}">Hide <small>never shown</small></a>
-  <a href="/filters?tier=block&scope={{.D.Scope}}" class="{{if eq $tier "block"}}on{{end}}">Block <small>shown, needs OK to play</small></a>
-  <a href="/filters/overview?scope={{.D.Scope}}">Overview</a>
-  <a href="/filters/lists">Lists <small>shared filter lists</small></a>
+<div class="page-head">
+  <div><h1>Filters</h1><p>What your kids can see and play. Shared lists add more; your own entries always win.</p></div>
 </div>
+{{if eq $tier "hide"}}<div class="tabs">
+  <a href="/filters?tier=hide&scope={{.D.Scope}}" class="on"><span class="t-head">{{icon "eye-off"}} Hide</span><small>never shown to the kid</small></a>
+  <a href="/filters?tier=block&scope={{.D.Scope}}"><span class="t-head">{{icon "lock"}} Block</span><small>shown with a lock, kid can ask</small></a>
+  <a href="/filters/overview?scope={{.D.Scope}}"><span class="t-head">{{icon "list"}} Overview</span><small>every entry, both tiers</small></a>
+  <a href="/filters/lists"><span class="t-head">{{icon "box"}} Shared lists</span><small>subscribe to public lists</small></a>
+</div>{{else}}<div class="tabs">
+  <a href="/filters?tier=hide&scope={{.D.Scope}}"><span class="t-head">{{icon "eye-off"}} Hide</span><small>never shown to the kid</small></a>
+  <a href="/filters?tier=block&scope={{.D.Scope}}" class="on"><span class="t-head">{{icon "lock"}} Block</span><small>shown with a lock, kid can ask</small></a>
+  <a href="/filters/overview?scope={{.D.Scope}}"><span class="t-head">{{icon "list"}} Overview</span><small>every entry, both tiers</small></a>
+  <a href="/filters/lists"><span class="t-head">{{icon "box"}} Shared lists</span><small>subscribe to public lists</small></a>
+</div>{{end}}
 <details class="card help">
-  <summary>How filtering decides</summary>
+  <summary>{{icon "info"}} How filtering decides</summary>
   <ol>
     <li><b>Hide</b> is checked first. If a Hide <i>Deny</i> rule wins, the video never appears: no title or thumbnail anywhere, and a direct link shows “not available”.</li>
     <li>Otherwise <b>Block</b> decides. If a Block <i>Deny</i> rule wins, the video shows in lists with a lock and the kid can ask you for it. Otherwise it plays.</li>
@@ -34,12 +41,11 @@
 {{range .D.Sections}}
 {{$type := .Type}}{{$sec := .}}
 <section class="card">
-  <h2>{{.Title}}</h2>
-  <p class="muted small">{{.Help}}</p>
+  <div class="card-head"><h2>{{if eq $type "video"}}{{icon "video"}}{{else if eq $type "channel"}}{{icon "user"}}{{else if eq $type "keyword"}}{{icon "search"}}{{else if eq $type "category"}}{{icon "list"}}{{else}}{{icon "sliders"}}{{end}} {{.Title}}</h2><p>{{.Help}}</p></div>
   <div class="two">
     {{range $list := list "allow" "deny"}}
     <div class="col {{$list}}">
-      <h3>{{if eq $list "allow"}}Allow{{else}}Deny{{end}} <small class="muted">{{if eq $tier "hide"}}{{if eq $list "allow"}}always shown{{else}}hidden{{end}}{{else}}{{if eq $list "allow"}}plays{{else}}blocked{{end}}{{end}}</small></h3>
+      <h3>{{if eq $list "allow"}}{{icon "check"}} Allow{{else}}{{icon "x"}} Deny{{end}} <small class="muted">{{if eq $tier "hide"}}{{if eq $list "allow"}}always shown{{else}}hidden{{end}}{{else}}{{if eq $list "allow"}}plays{{else}}blocked{{end}}{{end}}</small></h3>
       <ul class="rules">
       {{range index $sec.Lists $list}}
         <li>
@@ -96,7 +102,7 @@
     <select name="list"><option value="deny">Deny</option><option value="allow">Allow</option></select>
     <select name="kid"><option value="all">All kids</option>{{range $kids}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select>
     <input name="note" placeholder="note (optional)" class="short">
-    <button class="primary">Add to {{title $tier}}</button>
+    <button class="primary">{{icon "plus"}} Add to {{title $tier}}</button>
   </form>
 </section>
 {{end}}

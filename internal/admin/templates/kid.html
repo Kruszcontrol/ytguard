@@ -1,67 +1,84 @@
 {{define "content"}}
 {{$k := .D.Kid}}
-<h1>{{$k.Name}} <span class="muted small">Linux user <code>{{$k.LinuxUser}}</code></span></h1>
+<div class="page-head">
+  <div><p class="small"><a href="/kids">← Kids</a></p><h1>{{$k.Name}}</h1><p>Linux account <code>{{$k.LinuxUser}}</code> on this PC</p></div>
+</div>
 <form method="post" action="/kids/{{$k.ID}}" class="stack">
 <input type="hidden" name="csrf" value="{{.CSRF}}">
-<div class="card">
-  <label>Name <input name="name" value="{{$k.Name}}" maxlength="40"></label>
-</div>
-<div class="card">
-  <h2>Defaults for videos no rule mentions</h2>
-  <div class="two">
-    <fieldset>
-      <legend>Hide tier (does it show up at all?)</legend>
-      <label class="check"><input type="radio" name="hide_default" value="allow" {{if ne $k.HideDefault "deny"}}checked{{end}}> Show unknown videos</label>
-      <label class="check"><input type="radio" name="hide_default" value="deny" {{if eq $k.HideDefault "deny"}}checked{{end}}> Hide unknown videos <small class="muted">(only Hide-tier Allow entries ever appear)</small></label>
-    </fieldset>
-    <fieldset>
-      <legend>Block tier (can it play?)</legend>
-      <label class="check"><input type="radio" name="block_default" value="allow" {{if ne $k.BlockDefault "deny"}}checked{{end}}> Play unknown videos</label>
-      <label class="check"><input type="radio" name="block_default" value="deny" {{if eq $k.BlockDefault "deny"}}checked{{end}}> Block unknown videos <small class="muted">(kid must ask; you approve)</small></label>
-    </fieldset>
+
+<section class="card">
+  <div class="card-head"><h2>{{icon "timer"}} Time</h2>
+    <p>Turn a switch off to stop enforcing it while keeping its settings. Watch time is still recorded for History and reports.</p></div>
+  <div class="switch-row">
+    <label class="switch"><input type="checkbox" name="time_limits" {{if not $k.Options.TimeLimitsOff}}checked{{end}}> Time limits <small class="muted">daily minutes &amp; allowed hours</small></label>
+    <label class="switch"><input type="checkbox" name="breaks" {{if not $k.Options.BreaksOff}}checked{{end}}> Breaks <small class="muted">pause after a stretch of watching</small></label>
   </div>
-</div>
-<div class="card">
-  <h2>Shorts</h2>
-  <p class="muted small">Overrides every filter rule and approval.</p>
-  {{$sm := $k.Options.ShortsMode}}
-  <label class="check"><input type="radio" name="shorts" value="filter" {{if eq $sm "filter"}}checked{{end}}> Follow the filters <small class="muted">(like any other video)</small></label>
-  <label class="check"><input type="radio" name="shorts" value="block" {{if eq $sm "block"}}checked{{end}}> Block all Shorts <small class="muted">(still listed with a lock, never play, can't ask)</small></label>
-  <label class="check"><input type="radio" name="shorts" value="hide" {{if eq $sm "hide"}}checked{{end}}> Hide all Shorts <small class="muted">(removed everywhere: shelves, Shorts tab, search, direct links)</small></label>
-</div>
-<div class="card">
-  <h2>YouTube page options</h2>
-  <label class="check"><input type="checkbox" name="hide_comments" {{if $k.Options.HideComments}}checked{{end}}> Hide comments</label>
-  <label class="check"><input type="checkbox" name="disable_autoplay" {{if $k.Options.DisableAutoplay}}checked{{end}}> Turn off autoplay</label>
-</div>
-<div class="card">
-  <h2>Time</h2>
-  <div class="row wrap">
-    <label class="check"><input type="checkbox" name="time_limits" {{if not $k.Options.TimeLimitsOff}}checked{{end}}> <b>Time limits</b> <small class="muted">(daily minutes and allowed hours below)</small></label>
-    <label class="check"><input type="checkbox" name="breaks" {{if not $k.Options.BreaksOff}}checked{{end}}> <b>Breaks</b> <small class="muted">(break settings below)</small></label>
-  </div>
-  <p class="muted small">Unticked switches keep the settings below but don't enforce them. Watch time is still recorded for History and reports.</p>
-  <p class="muted small">Daily minutes: blank = unlimited, 0 = none. Hours: e.g. <code>07:00-08:00, 15:30-20:00</code>, blank = any time.
-  Breaks: after N minutes of watching, YouTube pauses for M minutes (a pause of M minutes on their own also counts as a break).</p>
-  <div class="scroll">
+  <div class="scroll" style="margin-top:1rem">
   <table class="sched">
     <tr><th>Day</th><th>Daily minutes</th><th>Allowed hours</th><th>Break every (min)</th><th>Break length (min)</th></tr>
     {{range $i, $r := .D.Rows}}
     <tr>
       <td>{{weekday $r.Weekday}}</td>
-      <td><input name="{{$r.Weekday}}_daily" type="number" min="0" max="1440" value="{{if ge $r.Sched.DailyMinutes 0}}{{$r.Sched.DailyMinutes}}{{end}}" placeholder="∞"></td>
+      <td><input name="{{$r.Weekday}}_daily" type="number" min="0" max="1440" value="{{if ge $r.Sched.DailyMinutes 0}}{{$r.Sched.DailyMinutes}}{{end}}" placeholder="unlimited"></td>
       <td><input name="{{$r.Weekday}}_windows" value="{{$r.Windows}}" placeholder="any time"></td>
-      <td><input name="{{$r.Weekday}}_break_after" type="number" min="0" max="600" value="{{if $r.Sched.BreakAfter}}{{$r.Sched.BreakAfter}}{{end}}" placeholder="off"></td>
-      <td><input name="{{$r.Weekday}}_break_len" type="number" min="0" max="600" value="{{if $r.Sched.BreakLen}}{{$r.Sched.BreakLen}}{{end}}" placeholder="off"></td>
+      <td><input name="{{$r.Weekday}}_break_after" type="number" min="0" max="600" value="{{if $r.Sched.BreakAfter}}{{$r.Sched.BreakAfter}}{{end}}" placeholder="no breaks"></td>
+      <td><input name="{{$r.Weekday}}_break_len" type="number" min="0" max="600" value="{{if $r.Sched.BreakLen}}{{$r.Sched.BreakLen}}{{end}}" placeholder="—"></td>
     </tr>
     {{end}}
   </table>
   </div>
-  <p><button type="button" data-copy-first-row>Copy Monday to all days</button> <button type="button" data-copy-weekdays>Copy Monday to Tue–Fri</button></p>
-</div>
-<p><button class="primary">Save</button></p>
+  <div class="row wrap" style="margin-top:.8rem">
+    <button type="button" class="small" data-copy-first-row>Copy Monday to every day</button>
+    <button type="button" class="small" data-copy-weekdays>Copy Monday to Tue–Fri</button>
+  </div>
+  <details class="small" style="margin-top:.8rem"><summary>How to fill this in</summary>
+    <p class="muted">Daily minutes: empty = unlimited, 0 = no YouTube that day. Allowed hours: e.g. <code>07:00-08:00, 15:30-20:00</code>, empty = any time.
+      Breaks: after N minutes of watching, YouTube pauses for M minutes. A pause of M minutes on their own also counts as a break.</p></details>
+</section>
+
+<section class="card">
+  <div class="card-head"><h2>{{icon "filter"}} Videos no rule mentions</h2>
+    <p>What happens to a video none of your filters or lists say anything about.</p></div>
+  <div class="two">
+    <fieldset>
+      <legend>{{icon "eye-off"}} Does it show up?</legend>
+      <label class="check"><input type="radio" name="hide_default" value="allow" {{if ne $k.HideDefault "deny"}}checked{{end}}> Show it</label>
+      <label class="check"><input type="radio" name="hide_default" value="deny" {{if eq $k.HideDefault "deny"}}checked{{end}}> Hide it <small class="muted">— only Hide → Allow entries ever appear</small></label>
+    </fieldset>
+    <fieldset>
+      <legend>{{icon "lock"}} Can it play?</legend>
+      <label class="check"><input type="radio" name="block_default" value="allow" {{if ne $k.BlockDefault "deny"}}checked{{end}}> Play it</label>
+      <label class="check"><input type="radio" name="block_default" value="deny" {{if eq $k.BlockDefault "deny"}}checked{{end}}> Block it <small class="muted">— the kid asks, you approve</small></label>
+    </fieldset>
+  </div>
+</section>
+
+<section class="card">
+  <div class="card-head"><h2>{{icon "video"}} Shorts</h2><p>Overrides every filter rule and approval.</p></div>
+  {{$sm := $k.Options.ShortsMode}}
+  <fieldset>
+    <label class="check"><input type="radio" name="shorts" value="filter" {{if eq $sm "filter"}}checked{{end}}> Follow the filters <small class="muted">— like any other video</small></label>
+    <label class="check"><input type="radio" name="shorts" value="block" {{if eq $sm "block"}}checked{{end}}> Block all Shorts <small class="muted">— listed with a lock, never play, can't ask</small></label>
+    <label class="check"><input type="radio" name="shorts" value="hide" {{if eq $sm "hide"}}checked{{end}}> Hide all Shorts <small class="muted">— removed everywhere: shelves, Shorts tab, search, links</small></label>
+  </fieldset>
+</section>
+
+<section class="card">
+  <div class="card-head"><h2>{{icon "sliders"}} YouTube page &amp; name</h2></div>
+  <div class="switch-row">
+    <label class="switch"><input type="checkbox" name="hide_comments" {{if $k.Options.HideComments}}checked{{end}}> Hide comments</label>
+    <label class="switch"><input type="checkbox" name="disable_autoplay" {{if $k.Options.DisableAutoplay}}checked{{end}}> Turn off autoplay</label>
+  </div>
+  <label style="margin-top:1rem; max-width:360px">Name <input name="name" value="{{$k.Name}}" maxlength="40"></label>
+</section>
+
+<div class="savebar"><span class="muted small">Changes apply as soon as you save.</span><button class="primary">{{icon "check"}} Save {{$k.Name}}</button></div>
 </form>
-<form method="post" action="/kids/{{$k.ID}}/delete" data-confirm="Remove {{$k.Name}} and all their history and kid-specific rules?">
-  <input type="hidden" name="csrf" value="{{.CSRF}}"><button class="danger">Remove {{$k.Name}}</button>
-</form>
+
+<section class="card danger-zone">
+  <div class="card-head"><h2>{{icon "trash"}} Remove {{$k.Name}}</h2><p>Deletes {{$k.Name}}'s history, schedule and kid-specific rules. Their Linux account stays.</p></div>
+  <form method="post" action="/kids/{{$k.ID}}/delete" data-confirm="Remove {{$k.Name}} and all their history and kid-specific rules?">
+    <input type="hidden" name="csrf" value="{{.CSRF}}"><button class="danger">{{icon "trash"}} Remove {{$k.Name}}</button>
+  </form>
+</section>
 {{end}}

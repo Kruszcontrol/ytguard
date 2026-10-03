@@ -289,7 +289,9 @@ func (a *App) RequestAccess(ctx context.Context, k store.Kid, videoID, message s
 		return store.Request{}, ErrTooManyRequests
 	}
 	r := store.Request{KidID: k.ID, KidName: k.Name, VideoID: videoID, Title: m.Title, ChannelID: m.ChannelID,
-		ChannelName: m.ChannelName, Reason: d.Reason, Message: truncate(strings.TrimSpace(message), 300)}
+		// The reason the kid was shown (recorded at the time), not a
+		// re-evaluation that may lack the page's metadata.
+		ChannelName: m.ChannelName, Reason: firstNonEmpty(ev.Reason, d.Reason), Message: truncate(strings.TrimSpace(message), 300)}
 	created, err := a.St.CreateRequest(&r)
 	if err != nil {
 		return r, err

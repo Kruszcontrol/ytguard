@@ -1,36 +1,49 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="{{.Theme}}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#2563eb">
+<meta name="theme-color" content="#3554f0">
 <title>{{.Title}} · YTGuard{{if .PCName}} · {{.PCName}}{{end}}</title>
-<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="{{asset "style.css"}}">
 <link rel="manifest" href="/static/manifest.webmanifest">
 <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
-<script src="/static/app.js" defer></script>
+<script src="{{asset "app.js"}}" defer></script>
 </head>
 <body>
 {{if .CSRF}}
 <header class="top">
-  <a class="brand" href="/">YTGuard{{if .PCName}} <span class="pc">{{.PCName}}</span>{{end}}</a>
-  <nav>
-    <a href="/" {{if eq .Active "dashboard"}}class="on"{{end}}>Dashboard</a>
-    <a href="/filters" {{if or (eq .Active "filters") (eq .Active "overview") (eq .Active "lists") (eq .Active "list")}}class="on"{{end}}>Filters</a>
-    <a href="/history" {{if eq .Active "history"}}class="on"{{end}}>History</a>
-    <a href="/kids" {{if or (eq .Active "kids") (eq .Active "kid")}}class="on"{{end}}>Kids</a>
-    <a href="/tester" {{if eq .Active "tester"}}class="on"{{end}}>Tester</a>
-    <a href="/settings" {{if eq .Active "settings"}}class="on"{{end}}>Settings</a>
-    <a href="/security" {{if or (eq .Active "security") (eq .Active "token")}}class="on"{{end}}>Security</a>
-    <form method="post" action="/logout" class="inline"><input type="hidden" name="csrf" value="{{.CSRF}}"><button class="link">Log out</button></form>
-  </nav>
+  <div class="top-inner">
+    <a class="brand" href="/"><img src="/static/icon.svg" alt=""> YTGuard{{if .PCName}} <span class="pc">{{.PCName}}</span>{{end}}</a>
+    <nav class="main-nav" aria-label="Main">
+      <a href="/" {{if eq .Active "dashboard"}}class="on"{{end}}>{{icon "home"}}<span class="label">Dashboard</span>{{if .Pending}}<span class="badge">{{.Pending}}</span>{{end}}</a>
+      <a href="/filters" {{if or (eq .Active "filters") (eq .Active "overview") (eq .Active "lists") (eq .Active "list")}}class="on"{{end}}>{{icon "filter"}}<span class="label">Filters</span></a>
+      <a href="/history" {{if eq .Active "history"}}class="on"{{end}}>{{icon "clock"}}<span class="label">History</span></a>
+      <a href="/kids" {{if or (eq .Active "kids") (eq .Active "kid")}}class="on"{{end}}>{{icon "users"}}<span class="label">Kids</span></a>
+      <a href="/tester" {{if eq .Active "tester"}}class="on"{{end}}>{{icon "flask"}}<span class="label">Tester</span></a>
+      <a href="/settings" {{if eq .Active "settings"}}class="on"{{end}}>{{icon "sliders"}}<span class="label">Settings</span></a>
+      <a href="/security" {{if or (eq .Active "security") (eq .Active "token")}}class="on"{{end}}>{{icon "shield"}}<span class="label">Security</span></a>
+    </nav>
+    <div class="top-tools">
+      {{template "themes" .}}
+      <form method="post" action="/logout" class="inline"><input type="hidden" name="csrf" value="{{.CSRF}}"><button class="icon-btn" title="Log out">{{icon "logout"}}<span class="label">Log out</span></button></form>
+    </div>
+  </div>
 </header>
 {{end}}
 <main{{if .CSRF}} data-csrf="{{.CSRF}}"{{end}}>
-{{if .Msg}}<div class="flash ok">{{.Msg}}</div>{{end}}
-{{if .Err}}<div class="flash err">{{.Err}}</div>{{end}}
+{{if .Msg}}<div class="flash ok" role="status">{{icon "check"}}<div class="grow">{{.Msg}}</div></div>{{end}}
+{{if .Err}}<div class="flash err" role="alert">{{icon "alert"}}<div class="grow">{{.Err}}</div></div>{{end}}
 {{template "content" .}}
 </main>
 <footer>YTGuard {{.Version}}{{if .CSRF}}{{if .Update.Available}} · <a href="/settings#updates">{{.Update.Latest}} available</a>{{end}}{{end}}</footer>
 </body>
 </html>
+{{define "themes"}}
+<details class="menu">
+  <summary class="icon-btn" title="Theme">{{icon "palette"}}<span class="label">Theme</span></summary>
+  <div class="menu-panel" role="menu">
+    {{range .Themes}}<a href="/theme/{{.ID}}" role="menuitem" {{if eq .ID $.Theme}}class="on"{{end}}><span class="swatch" style="background:{{.Swatch}}"></span>{{.Name}}</a>{{end}}
+  </div>
+</details>
+{{end}}

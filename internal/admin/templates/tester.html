@@ -1,8 +1,8 @@
 {{define "content"}}
-<h1>Rule tester</h1>
+<div class="page-head"><div><h1>Rule tester</h1><p>Paste any video link to see what each kid would get, and which rule or list decided.</p></div></div>
 <form method="get" action="/tester" class="card row wrap">
   <input name="url" value="{{.D.URL}}" placeholder="Paste a YouTube video link" class="grow" required autofocus>
-  <button class="primary">Test</button>
+  <button class="primary">{{icon "flask"}} Test</button>
 </form>
 {{with .D.Error}}<div class="flash err">{{.}}</div>{{end}}
 {{with .D.Meta}}{{if .VideoID}}
@@ -18,10 +18,10 @@
 {{range $r := .D.Results}}
 <div class="card">
   <div class="row between">
-    <h2>{{.Kid.Name}}</h2>
-    {{if eq .Decision.Outcome "hide"}}<span class="pill bad">Hidden</span>
-    {{else if eq .Decision.Outcome "block"}}<span class="pill warn">Shown, blocked</span>
-    {{else}}<span class="pill ok">Plays</span>{{end}}
+    <h2>{{icon "user"}} {{.Kid.Name}}</h2>
+    {{if eq .Decision.Outcome "hide"}}<span class="pill bad">{{icon "eye-off"}} Hidden</span>
+    {{else if eq .Decision.Outcome "block"}}<span class="pill warn">{{icon "lock"}} Shown, blocked</span>
+    {{else}}<span class="pill ok">{{icon "play"}} Plays</span>{{end}}
   </div>
   <table class="list">
     <tr><th>Tier</th><th>Verdict</th><th>Why</th></tr>
@@ -36,11 +36,11 @@
     <form method="post" action="/filters/quick" class="inline"><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="kid" value="{{$r.Kid.ID}}">
       <input type="hidden" name="tier" value="{{$tier}}"><input type="hidden" name="list" value="allow"><input type="hidden" name="type" value="video">
       <input type="hidden" name="value" value="{{.VideoID}}"><input type="hidden" name="label" value="{{.Title}}"><input type="hidden" name="from" value="tester">
-      <button class="small okbtn">Allow this video</button></form>
+      <button class="small okbtn">{{icon "check"}} Allow this video</button></form>
     {{if .ChannelID}}<form method="post" action="/filters/quick" class="inline"><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="kid" value="{{$r.Kid.ID}}">
       <input type="hidden" name="tier" value="{{$tier}}"><input type="hidden" name="list" value="allow"><input type="hidden" name="type" value="channel">
       <input type="hidden" name="value" value="{{.ChannelID}}"><input type="hidden" name="label" value="{{.ChannelName}}"><input type="hidden" name="from" value="tester">
-      <button class="small okbtn">Allow this channel</button></form>{{end}}
+      <button class="small okbtn">{{icon "check"}} Allow this channel</button></form>{{end}}
   </div>
   {{end}}{{end}}
   {{if .Decision.Hide.Unchecked}}<p class="muted small">Couldn't check: {{join .Decision.Hide.Unchecked "; "}}</p>{{end}}

@@ -1,14 +1,16 @@
 {{define "content"}}
 {{$csrf := .CSRF}}{{$kids := .Kids}}
-<h1>Filters</h1>
+<div class="page-head">
+  <div><h1>Filters</h1><p>What your kids can see and play. Shared lists add more; your own entries always win.</p></div>
+</div>
 <div class="tabs">
-  <a href="/filters?tier=hide">Hide <small>never shown</small></a>
-  <a href="/filters?tier=block">Block <small>shown, needs OK to play</small></a>
-  <a href="/filters/overview">Overview</a>
-  <a href="/filters/lists" class="on">Lists <small>shared filter lists</small></a>
+  <a href="/filters?tier=hide&scope="><span class="t-head">{{icon "eye-off"}} Hide</span><small>never shown to the kid</small></a>
+  <a href="/filters?tier=block&scope="><span class="t-head">{{icon "lock"}} Block</span><small>shown with a lock, kid can ask</small></a>
+  <a href="/filters/overview?scope="><span class="t-head">{{icon "list"}} Overview</span><small>every entry, both tiers</small></a>
+  <a href="/filters/lists" class="on"><span class="t-head">{{icon "box"}} Shared lists</span><small>subscribe to public lists</small></a>
 </div>
 <details class="card help">
-  <summary>How shared lists work</summary>
+  <summary>{{icon "info"}} How shared lists work</summary>
   <p>Filter lists are maintained by others (like ad-block lists) and update automatically once a day. Pick the ones that fit each kid's age.</p>
   <p>For each list choose what it does: <b>Block</b> (default) shows matching videos with a lock so the kid can ask you;
     <b>Hide</b> removes them completely; <b>Mixed</b> follows the list author's choice for each entry (some hidden, some blocked).</p>
@@ -19,7 +21,7 @@
 </details>
 
 <section class="card">
-  <h2>Your subscriptions</h2>
+  <div class="card-head"><h2>{{icon "box"}} Your subscriptions</h2></div>
   {{if not .D.Lists}}<p class="muted">No lists yet. Pick from the recommended lists below, or add one by its address.</p>{{end}}
   {{range .D.Lists}}
   <div class="request">
@@ -36,7 +38,7 @@
         {{if .Warnings}}<div class="muted small">{{len .Warnings}} lines in this list were skipped (<a href="/filters/lists/{{.ID}}">details</a>).</div>{{end}}
       </div>
       <div class="actions">
-        <form method="post" action="/filters/lists/{{.ID}}/refresh"><input type="hidden" name="csrf" value="{{$csrf}}"><button class="small">Update now</button></form>
+        <form method="post" action="/filters/lists/{{.ID}}/refresh"><input type="hidden" name="csrf" value="{{$csrf}}"><button class="small">{{icon "refresh"}} Update now</button></form>
         <form method="post" action="/filters/lists/{{.ID}}/delete" data-confirm="Unsubscribe from {{.Title}}?"><input type="hidden" name="csrf" value="{{$csrf}}"><button class="ghost small">Unsubscribe</button></form>
       </div>
     </div>
@@ -58,7 +60,7 @@
 </section>
 
 <section class="card">
-  <h2>Recommended lists</h2>
+  <div class="card-head"><h2>{{icon "globe"}} Recommended lists</h2></div>
   <p class="muted small">From <code>{{.D.CatalogURL}}</code>. Anyone can suggest changes to these lists on GitHub.</p>
   {{with .D.CatalogError}}<div class="flash warn">Couldn't load the recommended lists: {{.}}</div>{{end}}
   {{range .D.Catalog}}
@@ -78,7 +80,7 @@
         </select>
         <label class="check"><input type="checkbox" name="kid" value="all" checked> All kids</label>
         {{range $kids}}<label class="check"><input type="checkbox" name="kid" value="{{.ID}}"> {{.Name}}</label>{{end}}
-        <button class="primary small">Subscribe</button>
+        <button class="primary small">{{icon "plus"}} Subscribe</button>
       </form>{{end}}
     </div>
   </div>
@@ -86,7 +88,7 @@
 </section>
 
 <section class="card">
-  <h2>Add a list by address</h2>
+  <div class="card-head"><h2>{{icon "plus"}} Add a list by address</h2></div>
   <form method="post" action="/filters/lists/subscribe" class="row wrap">
     <input type="hidden" name="csrf" value="{{$csrf}}">
     <input name="url" placeholder="https://…/my-list.txt" required class="grow">
@@ -97,17 +99,17 @@
         </select>
     <label class="check"><input type="checkbox" name="kid" value="all" checked> All kids</label>
     {{range $kids}}<label class="check"><input type="checkbox" name="kid" value="{{.ID}}"> {{.Name}}</label>{{end}}
-    <button class="primary">Subscribe</button>
+    <button class="primary">{{icon "plus"}} Subscribe</button>
   </form>
   <p class="muted small">Must be an https:// address of a YTGuard filter list (plain text; the format is in the README).</p>
 </section>
 
 <section class="card">
-  <h2>Share your own filters</h2>
+  <div class="card-head"><h2>{{icon "download"}} Share your own filters</h2></div>
   <p class="muted small">Download your {{.D.OwnCount}} “all kids” entries as a list file, e.g. to publish it or contribute it to a shared list. Kid-specific entries aren't included.</p>
   <form method="get" action="/filters/lists/export.txt" class="row wrap">
     <input name="title" placeholder="List title" class="grow">
-    <button>Download list file</button>
+    <button>{{icon "download"}} Download list file</button>
   </form>
 </section>
 {{end}}

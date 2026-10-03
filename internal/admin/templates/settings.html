@@ -1,24 +1,43 @@
 {{define "content"}}
 {{$s := .D.S}}
-<h1>Settings</h1>
+<div class="page-head"><div><h1>Settings</h1><p>For this PC. Each kid's time and filters are under Kids and Filters.</p></div></div>
+<div class="settings-layout">
+<nav class="toc" aria-label="Settings sections">
+  <a href="#pc">{{icon "devices"}} This PC</a>
+  <a href="#reports">{{icon "mail"}} Daily report</a>
+  <a href="#homeassistant">{{icon "home-assistant"}} Home Assistant</a>
+  <a href="#apps">{{icon "globe"}} Other browsers</a>
+  <a href="#lists">{{icon "box"}} Filter lists</a>
+  <a href="#youtube">{{icon "video"}} YouTube API</a>
+  <a href="#updates">{{icon "arrow-up"}} Updates</a>
+  <a href="#logins">{{icon "key"}} Logins</a>
+  <a href="#copy">{{icon "download"}} Copy filters</a>
+</nav>
+<div>
 <form method="post" action="/settings" class="stack">
 <input type="hidden" name="csrf" value="{{.CSRF}}">
-<div class="card">
-  <h2>This PC</h2>
-  <label>Name <input name="pc_name" value="{{$s.PCName}}" maxlength="40"></label>
-  <label>Public URL <input name="public_url" value="{{$s.PublicURL}}" placeholder="https://{{.D.Host}}"><small class="muted">How you reach this page from your phone. Used for links in reports and Home Assistant notifications.</small></label>
-  <label>Linux users that aren't kids
+
+<section class="card" id="pc">
+  <div class="card-head"><h2>{{icon "devices"}} This PC</h2></div>
+  <div class="two">
+    <label>Name <input name="pc_name" value="{{$s.PCName}}" maxlength="40"></label>
+    <label>Address you use to reach this page <input name="public_url" value="{{$s.PublicURL}}" placeholder="https://{{.D.Host}}">
+      <small class="muted">Used for links in reports and Home Assistant notifications.</small></label>
+  </div>
+  <label style="margin-top:.9rem">Linux accounts that aren't kids (e.g. yours)
     <select name="unmapped_policy">
-      <option value="allow" {{if ne $s.UnmappedPolicy "block"}}selected{{end}}>Unrestricted (parents, guests you trust)</option>
-      <option value="block" {{if eq $s.UnmappedPolicy "block"}}selected{{end}}>Block YouTube entirely</option>
+      <option value="allow" {{if ne $s.UnmappedPolicy "block"}}selected{{end}}>Not filtered</option>
+      <option value="block" {{if eq $s.UnmappedPolicy "block"}}selected{{end}}>YouTube blocked entirely</option>
     </select>
   </label>
-</div>
-<div class="card">
-  <h2>Daily report</h2>
-  <label>Send at <input name="report_time" value="{{$s.ReportTime}}" placeholder="20:30" class="short"><small class="muted">Local time. If the PC is off then, it's sent at next start-up. Videos watched after this time show up in the History page (and in the next catch-up only if the report wasn't sent yet).</small></label>
+</section>
+
+<section class="card" id="reports">
+  <div class="card-head"><h2>{{icon "mail"}} Daily report</h2>
+    <p>Every video each kid watched, plus blocked and hidden attempts. If the PC is off at report time, it's sent when it next starts.</p></div>
+  <label style="max-width:220px">Send at <input name="report_time" value="{{$s.ReportTime}}" placeholder="20:30"></label>
   <fieldset>
-    <legend><label class="check"><input type="checkbox" name="report_email" {{if $s.ReportEmail}}checked{{end}}> Email</label></legend>
+    <legend><label class="switch"><input type="checkbox" name="report_email" {{if $s.ReportEmail}}checked{{end}}> {{icon "mail"}} Email</label></legend>
     <div class="two">
       <label>SMTP server <input name="smtp_host" value="{{$s.SMTPHost}}" placeholder="smtp.gmail.com"></label>
       <label>Port <input name="smtp_port" type="number" value="{{$s.SMTPPort}}" class="short"></label>
@@ -30,106 +49,121 @@
         </select>
       </label>
       <label>Username <input name="smtp_user" value="{{$s.SMTPUser}}" autocomplete="off"></label>
-      <label>Password <input name="smtp_pass" type="password" placeholder="{{if $s.SMTPPass}}(saved — leave blank to keep){{else}}app password{{end}}" autocomplete="new-password">
-        {{if $s.SMTPPass}}<span class="check small"><input type="checkbox" name="smtp_pass_clear"> clear</span>{{end}}</label>
+      <label>Password <input name="smtp_pass" type="password" placeholder="{{if $s.SMTPPass}}saved — leave empty to keep{{else}}app password{{end}}" autocomplete="new-password">
+        {{if $s.SMTPPass}}<span class="check small"><input type="checkbox" name="smtp_pass_clear"> clear saved password</span>{{end}}</label>
       <label>From <input name="smtp_from" value="{{$s.SMTPFrom}}" placeholder="YTGuard &lt;you@gmail.com&gt;"></label>
       <label>To <input name="smtp_to" value="{{$s.SMTPTo}}" placeholder="you@example.com, partner@example.com"></label>
     </div>
-    <p class="muted small">Gmail: turn on 2-step verification and create an “app password”; use smtp.gmail.com, port 587, STARTTLS.</p>
+    <p class="muted small">Gmail: turn on 2-step verification, create an “app password”, and use smtp.gmail.com, port 587, STARTTLS.</p>
   </fieldset>
   <fieldset>
-    <legend><label class="check"><input type="checkbox" name="report_ha" {{if $s.ReportHA}}checked{{end}}> Home Assistant</label></legend>
-    <p class="muted small">Sends the report as a <code>daily_report</code> event over MQTT and/or the webhook (set up below).</p>
+    <legend><label class="switch"><input type="checkbox" name="report_ha" {{if $s.ReportHA}}checked{{end}}> {{icon "home-assistant"}} Home Assistant</label></legend>
+    <p class="muted small" style="margin:0">Sent as a <code>daily_report</code> event over MQTT and/or the webhook (set up below).</p>
   </fieldset>
-</div>
-<div class="card" id="homeassistant">
-  <h2>Home Assistant</h2>
+</section>
+
+<section class="card" id="homeassistant">
+  <div class="card-head"><h2>{{icon "home-assistant"}} Home Assistant</h2>
+    <p>Status: <span class="status-line">{{if eq (printf "%.9s" .D.MQTTStatus) "connected"}}<span class="pill ok">{{icon "check"}} {{.D.MQTTStatus}}</span>{{else if eq .D.MQTTStatus "off"}}<span class="pill">MQTT off</span>{{else}}<span class="pill bad">{{icon "alert"}} {{.D.MQTTStatus}}</span>{{end}}</span>
+      · this PC's ID <code>{{.D.PCID}}</code></p></div>
   <fieldset>
-    <legend><label class="check"><input type="checkbox" name="mqtt_enabled" {{if $s.MQTTEnabled}}checked{{end}}> MQTT (recommended)</label></legend>
-    <p class="muted small">This PC and each kid appear in Home Assistant automatically, as devices with sensors, a pause switch and +time buttons.
-      Use the broker Home Assistant uses (e.g. the Mosquitto add-on) and a dedicated MQTT user.
-      Status: <b>{{.D.MQTTStatus}}</b> · this PC's ID: <code>{{.D.PCID}}</code></p>
+    <legend><label class="switch"><input type="checkbox" name="mqtt_enabled" {{if $s.MQTTEnabled}}checked{{end}}> MQTT <span class="pill ok">recommended</span></label></legend>
+    <p class="muted small">This PC and each kid appear in Home Assistant automatically, with sensors, a pause switch and +time buttons.
+      Use Home Assistant's broker (e.g. the Mosquitto add-on) and a dedicated MQTT login.</p>
     <div class="two">
       <label>Broker address <input name="mqtt_host" value="{{$s.MQTTHost}}" placeholder="homeassistant.local"></label>
       <label>Port <input name="mqtt_port" type="number" value="{{$s.MQTTPort}}" class="short"></label>
       <label>Username <input name="mqtt_user" value="{{$s.MQTTUser}}" autocomplete="off"></label>
-      <label>Password <input name="mqtt_pass" type="password" placeholder="{{if $s.MQTTPass}}(saved — leave blank to keep){{end}}" autocomplete="new-password">
-        {{if $s.MQTTPass}}<span class="check small"><input type="checkbox" name="mqtt_pass_clear"> clear</span>{{end}}</label>
+      <label>Password <input name="mqtt_pass" type="password" placeholder="{{if $s.MQTTPass}}saved — leave empty to keep{{end}}" autocomplete="new-password">
+        {{if $s.MQTTPass}}<span class="check small"><input type="checkbox" name="mqtt_pass_clear"> clear saved password</span>{{end}}</label>
     </div>
-    <label class="check"><input type="checkbox" name="mqtt_tls" {{if $s.MQTTTLS}}checked{{end}}> Use TLS (usually port 8883)</label>
-    <label class="check"><input type="checkbox" name="mqtt_insecure" {{if $s.MQTTInsecure}}checked{{end}}> Broker uses a self-signed certificate (skip verification)</label>
-    <details><summary class="small">Advanced</summary>
-      <div class="two">
+    <div class="switch-row" style="margin-top:.8rem">
+      <label class="switch"><input type="checkbox" name="mqtt_tls" {{if $s.MQTTTLS}}checked{{end}}> Use TLS <small class="muted">usually port 8883</small></label>
+      <label class="switch"><input type="checkbox" name="mqtt_insecure" {{if $s.MQTTInsecure}}checked{{end}}> Self-signed broker certificate</label>
+    </div>
+    <details class="small" style="margin-top:.7rem"><summary>Advanced</summary>
+      <div class="two" style="margin-top:.6rem">
         <label>Topic prefix <input name="mqtt_base" value="{{$s.MQTTBase}}" class="short"><small class="muted">Same on every PC (each PC adds its ID).</small></label>
         <label>Discovery prefix <input name="mqtt_discovery" value="{{$s.MQTTDiscovery}}" class="short"><small class="muted">Home Assistant's, normally <code>homeassistant</code>.</small></label>
       </div>
     </details>
   </fieldset>
   <fieldset>
-    <legend>Webhook (alternative without MQTT)</legend>
-  <label>Webhook URL <input name="ha_webhook" placeholder="{{if $s.HAWebhookURL}}(saved — leave blank to keep){{else}}http://homeassistant.local:8123/api/webhook/ytguard-…{{end}}" autocomplete="off">
-    {{if $s.HAWebhookURL}}<span class="check small"><input type="checkbox" name="ha_webhook_clear"> clear</span>{{end}}</label>
-  <label class="check"><input type="checkbox" name="ha_insecure" {{if $s.HAInsecureTLS}}checked{{end}}> Home Assistant uses a self-signed HTTPS certificate (skip verification)</label>
-  <p class="muted small">Without MQTT, sensors and buttons need an API token (Security) and YAML; see docs/home-assistant.md.</p>
+    <legend>Webhook <small class="muted">(alternative without MQTT)</small></legend>
+    <label>Webhook URL <input name="ha_webhook" placeholder="{{if $s.HAWebhookURL}}saved — leave empty to keep{{else}}http://homeassistant.local:8123/api/webhook/ytguard-…{{end}}" autocomplete="off">
+      {{if $s.HAWebhookURL}}<span class="check small"><input type="checkbox" name="ha_webhook_clear"> clear saved webhook</span>{{end}}</label>
+    <label class="switch" style="margin-top:.6rem"><input type="checkbox" name="ha_insecure" {{if $s.HAInsecureTLS}}checked{{end}}> Home Assistant uses a self-signed HTTPS certificate</label>
+    <p class="muted small">Without MQTT, sensors and buttons need an API token (Security) and YAML — see docs/home-assistant.md.</p>
   </fieldset>
-  <label class="check"><input type="checkbox" name="ha_events" {{if $s.HAEvents}}checked{{end}}> Send instant events (MQTT and/or webhook): approval requests, time's up, other browsers found, updates, parent logins</label>
-  <label>Allow showing this UI inside these sites (iframe)
-    <input name="embed_origins" value="{{$s.EmbedOrigins}}" placeholder="https://homeassistant.local:8123">
-    <small class="muted">Space-separated. Leave empty unless you use a Home Assistant Webpage card. Some phone apps block logins inside iframes; a dashboard button that opens this page is more reliable.</small></label>
-</div>
-<div class="card">
-  <h2>YouTube Data API (optional)</h2>
-  <label>API key <input name="yt_key" placeholder="{{if $s.YouTubeAPIKey}}(saved — leave blank to keep){{else}}AIza…{{end}}" autocomplete="off">
-    {{if $s.YouTubeAPIKey}}<span class="check small"><input type="checkbox" name="yt_key_clear"> clear</span>{{end}}</label>
-  <p class="muted small">With a free key from Google Cloud Console (YouTube Data API v3), description, tag, category and made-for-kids rules also apply to thumbnails in feeds and search, not just when a video is opened.</p>
-</div>
-<div class="card">
-  <h2>Filter lists</h2>
+  <label class="switch"><input type="checkbox" name="ha_events" {{if $s.HAEvents}}checked{{end}}> Instant events <small class="muted">approval requests, time's up, other browsers, updates, logins</small></label>
+  <details class="small" style="margin-top:.8rem"><summary>Show this page inside Home Assistant (iframe)</summary>
+    <label style="margin-top:.5rem">Allowed sites <input name="embed_origins" value="{{$s.EmbedOrigins}}" placeholder="https://homeassistant.local:8123">
+      <small class="muted">Space-separated. Some phone apps block logins inside iframes; a dashboard button that opens this page is more reliable.</small></label>
+  </details>
+</section>
+
+<section class="card" id="apps">
+  <div class="card-head"><h2>{{icon "globe"}} Other browsers &amp; video apps</h2>
+    <p>Checks kids' running programs every minute, and hourly their home folders, Flatpaks and system browsers. Finds portable browsers, Tor, AppImages, FreeTube, yt-dlp and similar. It can't remove them.</p></div>
+  <label class="switch"><input type="checkbox" name="app_scan" {{if $s.AppScan}}checked{{end}}> Look for other browsers and YouTube apps</label>
+</section>
+
+<section class="card" id="lists">
+  <div class="card-head"><h2>{{icon "box"}} Filter lists</h2></div>
   <label>Recommended-lists catalog <input name="catalog_url" value="{{$s.ListCatalogURL}}" placeholder="{{if .D.DefaultCatalog}}{{.D.DefaultCatalog}}{{else}}https://…/catalog.json{{end}}">
-    <small class="muted">Where the “Recommended lists” on Filters → Lists come from. Leave empty for the default.</small></label>
-</div>
-<div class="card">
-  <h2>Other browsers &amp; video apps</h2>
-  <label class="check"><input type="checkbox" name="app_scan" {{if $s.AppScan}}checked{{end}}> Look for other browsers and YouTube apps kids could use instead of Chrome</label>
-  <p class="muted small">Checks kids' running programs every minute, and (hourly) their home folders, Flatpaks and system-wide browsers.
-    Finds portable browsers, Tor Browser, AppImages, FreeTube, yt-dlp and similar. Results show on the dashboard and go to Home Assistant.
-    It can't remove them.</p>
-</div>
-<div class="card" id="updates">
-  <h2>Updates</h2>
+    <small class="muted">Where “Recommended lists” on Filters → Shared lists come from. Leave empty for the default.</small></label>
+</section>
+
+<section class="card" id="youtube">
+  <div class="card-head"><h2>{{icon "video"}} YouTube Data API <span class="pill">optional</span></h2>
+    <p>With a free key (Google Cloud Console, “YouTube Data API v3”), description, tag, category and made-for-kids rules also apply to thumbnails in feeds and search, not only when a video is opened.</p></div>
+  <label>API key <input name="yt_key" placeholder="{{if $s.YouTubeAPIKey}}saved — leave empty to keep{{else}}AIza…{{end}}" autocomplete="off">
+    {{if $s.YouTubeAPIKey}}<span class="check small"><input type="checkbox" name="yt_key_clear"> clear saved key</span>{{end}}</label>
+</section>
+
+<section class="card" id="updates">
+  <div class="card-head"><h2>{{icon "arrow-up"}} Updates</h2></div>
   {{with $.Update}}
-  <label class="check"><input type="checkbox" name="update_check" {{if $s.UpdateCheck}}checked{{end}}> Check GitHub{{if .Repo}} (<code>{{.Repo}}</code>){{end}} for new versions twice a day</label>
-  <p class="muted small">This PC runs YTGuard <b>{{.Current}}</b>.
-    {{if not .Repo}}This build doesn't know its GitHub repository, so it can't check for updates.
-    {{else if .Error}}Last check failed: {{.Error}}.
-    {{else if .Available}}<b>{{.Latest}} is available</b>{{if .URL}} — <a href="{{.URL}}" target="_blank" rel="noopener">release notes</a>{{end}}. To install it, an adult runs <code>sudo ytguard upgrade</code> on this PC.
-    {{else if .Latest}}Up to date (latest release {{.Latest}}).{{end}}
-    {{if not .Checked.IsZero}}Checked {{.Checked.Format "Jan 2 15:04"}}.{{end}}
-    Updating never happens automatically. Only the version number is sent to GitHub, nothing about your family.</p>
+  <label class="switch"><input type="checkbox" name="update_check" {{if $s.UpdateCheck}}checked{{end}}> Check GitHub{{if .Repo}} (<code>{{.Repo}}</code>){{end}} for new versions twice a day</label>
+  <p class="small" style="margin-bottom:0">This PC runs <b>{{.Current}}</b>.
+    {{if not .Repo}}<span class="muted">This build doesn't know its GitHub repository, so it can't check.</span>
+    {{else if .Error}}<span class="pill bad">{{icon "alert"}} last check failed</span> <span class="muted">{{.Error}}</span>
+    {{else if .Available}}<span class="pill warn">{{icon "arrow-up"}} {{.Latest}} available</span>{{if .URL}} <a href="{{.URL}}" target="_blank" rel="noopener">release notes</a>{{end}} — an adult runs <code>sudo ytguard upgrade</code> on this PC.
+    {{else if .Latest}}<span class="pill ok">{{icon "check"}} up to date</span>{{end}}
+    {{if not .Checked.IsZero}}<span class="muted">Checked {{.Checked.Format "Jan 2 15:04"}}.</span>{{end}}</p>
+  <p class="muted small">Updates are never installed automatically. Only the version number is sent to GitHub, nothing about your family.</p>
   {{end}}
-</div>
-<div class="card">
-  <h2>Logins</h2>
-  <label>“Remember this device” lasts <input name="session_days" type="number" min="1" max="400" value="{{$s.SessionDays}}" class="short"> days</label>
-</div>
-<p><button class="primary">Save settings</button></p>
+</section>
+
+<section class="card" id="logins">
+  <div class="card-head"><h2>{{icon "key"}} Logins</h2></div>
+  <label style="max-width:320px">“Remember this device” lasts (days) <input name="session_days" type="number" min="1" max="400" value="{{$s.SessionDays}}" class="short"></label>
+</section>
+
+<div class="savebar"><span class="muted small">Saves every section on this page.</span><button class="primary">{{icon "check"}} Save settings</button></div>
 </form>
-<div class="card row wrap">
-  <form method="post" action="/settings/test-email" class="inline"><input type="hidden" name="csrf" value="{{.CSRF}}"><button>Send test email</button></form>
-  <form method="post" action="/settings/test-ha" class="inline"><input type="hidden" name="csrf" value="{{.CSRF}}"><button>Send test to Home Assistant</button></form>
-  <form method="post" action="/settings/check-update" class="inline"><input type="hidden" name="csrf" value="{{.CSRF}}"><button>Check for updates now</button></form>
-  <span class="muted small">Save first.</span>
-</div>
-<div class="card">
-  <h2>Copy filters between PCs</h2>
-  <p class="muted small">Export this PC's filter lists, then import the file on the other PC. Kid-specific rules are matched by kid name.</p>
+
+<section class="card" style="margin-top:1rem">
+  <div class="card-head"><h2>{{icon "bell"}} Test</h2><p>Save first, then send a test.</p></div>
   <div class="row wrap">
-    <a class="button" href="/export">Export filters</a>
-    <form method="post" action="/import" enctype="multipart/form-data" class="row">
+    <form method="post" action="/settings/test-email" class="inline"><input type="hidden" name="csrf" value="{{.CSRF}}"><button>{{icon "mail"}} Send test email</button></form>
+    <form method="post" action="/settings/test-ha" class="inline"><input type="hidden" name="csrf" value="{{.CSRF}}"><button>{{icon "home-assistant"}} Send test to Home Assistant</button></form>
+    <form method="post" action="/settings/check-update" class="inline"><input type="hidden" name="csrf" value="{{.CSRF}}"><button>{{icon "refresh"}} Check for updates now</button></form>
+  </div>
+</section>
+
+<section class="card" id="copy">
+  <div class="card-head"><h2>{{icon "download"}} Copy filters between PCs</h2>
+    <p>Export this PC's filters, then import the file on another PC. Kid-specific filters are matched by kid name.</p></div>
+  <div class="row wrap">
+    <a class="button" href="/export">{{icon "download"}} Export filters</a>
+    <form method="post" action="/import" enctype="multipart/form-data" class="row wrap">
       <input type="hidden" name="csrf" value="{{.CSRF}}">
       <input type="file" name="file" accept="application/json,.json" required>
       <button>Import</button>
     </form>
   </div>
+</section>
+</div>
 </div>
 {{end}}
