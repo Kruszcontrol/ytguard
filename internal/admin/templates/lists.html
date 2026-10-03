@@ -12,8 +12,9 @@
 <details class="card help">
   <summary>{{icon "info"}} How shared lists work</summary>
   <p>Filter lists are maintained by others (like ad-block lists) and update automatically once a day. Pick the ones that fit each kid's age.</p>
-  <p>For each list choose what it does: <b>Block</b> (default) shows matching videos with a lock so the kid can ask you;
-    <b>Hide</b> removes them completely; <b>Mixed</b> follows the list author's choice for each entry (some hidden, some blocked).</p>
+  <p>For each list choose what it does: <b>Mixed</b> (default) follows the list author's choice for each entry — clearly inappropriate
+    videos are hidden, borderline ones are blocked so the kid can ask you; <b>Block everything</b> shows all matches with a lock;
+    <b>Hide everything</b> removes them all.</p>
   <p><b>Your own entries always win</b> over a list's entry of the same type. For example, if a list hides the keyword “fortnite”, adding
     “fortnite” to your own Hide&nbsp;→&nbsp;Allow keywords shows those videos again. The usual order still applies (video → channel → keyword → category → attribute),
     so to override a list's channel entry, add that channel (or video) yourself. The Rule tester shows which list decided.</p>
@@ -24,36 +25,34 @@
   <div class="card-head"><h2>{{icon "box"}} Your subscriptions</h2></div>
   {{if not .D.Lists}}<p class="muted">No lists yet. Pick from the recommended lists below, or add one by its address.</p>{{end}}
   {{range .D.Lists}}
-  <div class="request">
-    <div class="row between wrap">
-      <div>
-        <b><a href="/filters/lists/{{.ID}}">{{.Title}}</a></b>
+  <div class="list-item">
+    <div class="li-head">
+      <div class="li-title">
+        <a href="/filters/lists/{{.ID}}"><b>{{.Title}}</b></a>
         {{if .Ages}}<span class="chip">ages {{.Ages}}</span>{{end}}
-        {{if not .Enabled}}<span class="pill muted">off</span>{{end}}
-        <div class="muted small">{{.Description}}</div>
-        <div class="small">{{.RuleCount}} entries{{if .AllowCount}} · <b>{{.AllowCount}} allow</b>{{end}}
-          · <b>{{if eq .Mode "hide"}}hides{{else if eq .Mode "mixed"}}hides or blocks (mixed){{else}}blocks{{end}}</b> for {{.AppliesTo}} · updated {{datetime .FetchedAt}}{{if .Version}} · version {{.Version}}{{end}}
-          {{if .Homepage}} · <a href="{{.Homepage}}" target="_blank" rel="noopener">homepage</a>{{end}}</div>
-        {{if .Error}}<div class="flash err small">Last update failed: {{.Error}} (still using the previous copy)</div>{{end}}
-        {{if .Warnings}}<div class="muted small">{{len .Warnings}} lines in this list were skipped (<a href="/filters/lists/{{.ID}}">details</a>).</div>{{end}}
+        {{if not .Enabled}}<span class="pill">off</span>{{else if eq .Mode "hide"}}<span class="pill bad">{{icon "eye-off"}} hides</span>{{else if eq .Mode "block"}}<span class="pill warn">{{icon "lock"}} blocks</span>{{else}}<span class="pill">mixed</span>{{end}}
       </div>
-      <div class="actions">
+      <div class="li-actions">
         <form method="post" action="/filters/lists/{{.ID}}/refresh"><input type="hidden" name="csrf" value="{{$csrf}}"><button class="small">{{icon "refresh"}} Update now</button></form>
         <form method="post" action="/filters/lists/{{.ID}}/delete" data-confirm="Unsubscribe from {{.Title}}?"><input type="hidden" name="csrf" value="{{$csrf}}"><button class="ghost small">Unsubscribe</button></form>
       </div>
     </div>
-    <form method="post" action="/filters/lists/{{.ID}}/options" class="row wrap small">
+    <p class="li-desc">{{.Description}}</p>
+    <div class="li-meta">{{.RuleCount}} entries{{if .AllowCount}} · <b>{{.AllowCount}} allow</b>{{end}} · for {{.AppliesTo}} · updated {{datetime .FetchedAt}}{{if .Version}} · version {{.Version}}{{end}}{{if .Homepage}} · <a href="{{.Homepage}}" target="_blank" rel="noopener">homepage</a>{{end}}</div>
+    {{if .Error}}<div class="flash err small">{{icon "alert"}}<div class="grow">Last update failed: {{.Error}} (still using the previous copy)</div></div>{{end}}
+    {{if .Warnings}}<div class="li-meta">{{len .Warnings}} lines in this list were skipped (<a href="/filters/lists/{{.ID}}">details</a>).</div>{{end}}
+    <form method="post" action="/filters/lists/{{.ID}}/options" class="li-controls">
       <input type="hidden" name="csrf" value="{{$csrf}}">
-      <label class="check"><input type="checkbox" name="enabled" {{if .Enabled}}checked{{end}}> On</label>
+      <label class="switch"><input type="checkbox" name="enabled" {{if .Enabled}}checked{{end}}> On</label>
       <select name="mode" aria-label="What this list does">
-        <option value="block" {{if eq .Mode "block"}}selected{{end}}>Block (kid can ask)</option>
-        <option value="hide" {{if eq .Mode "hide"}}selected{{end}}>Hide (never shown)</option>
         <option value="mixed" {{if eq .Mode "mixed"}}selected{{end}}>Mixed (as the list marks each entry)</option>
+        <option value="block" {{if eq .Mode "block"}}selected{{end}}>Block everything (kid can ask)</option>
+        <option value="hide" {{if eq .Mode "hide"}}selected{{end}}>Hide everything (never shown)</option>
       </select>
-      <span>for:</span>
-      <label class="check"><input type="checkbox" name="kid" value="all" {{if not .Kids}}checked{{end}}> All kids</label>
-      {{$l := .}}{{range $kids}}<label class="check"><input type="checkbox" name="kid" value="{{.ID}}" {{if has64 $l.Kids .ID}}checked{{end}}> {{.Name}}</label>{{end}}
-      <button class="small">Save</button>
+      <span class="li-kids"><span class="muted">for</span>
+        <label class="check"><input type="checkbox" name="kid" value="all" {{if not .Kids}}checked{{end}}> All kids</label>
+        {{$l := .}}{{range $kids}}<label class="check"><input type="checkbox" name="kid" value="{{.ID}}" {{if has64 $l.Kids .ID}}checked{{end}}> {{.Name}}</label>{{end}}</span>
+      <button class="small primary li-go">{{icon "check"}} Save</button>
     </form>
   </div>
   {{end}}
@@ -64,25 +63,25 @@
   <p class="muted small">From <code>{{.D.CatalogURL}}</code>. Anyone can suggest changes to these lists on GitHub.</p>
   {{with .D.CatalogError}}<div class="flash warn">Couldn't load the recommended lists: {{.}}</div>{{end}}
   {{range .D.Catalog}}
-  <div class="request">
-    <div class="row between wrap">
-      <div>
-        <b>{{.Title}}</b> {{if .Ages}}<span class="chip">ages {{.Ages}}</span>{{end}}
-        <div class="muted small">{{.Description}}</div>
-      </div>
-      {{if .Subscribed}}<span class="pill ok">subscribed</span>{{else}}
-      <form method="post" action="/filters/lists/subscribe" class="row wrap small">
-        <input type="hidden" name="csrf" value="{{$csrf}}"><input type="hidden" name="url" value="{{.URL}}">
-        <select name="mode" aria-label="What this list does">
-          <option value="block" selected>Block (kid can ask)</option>
-          <option value="hide">Hide (never shown)</option>
-          <option value="mixed">Mixed (as the list marks it)</option>
-        </select>
-        <label class="check"><input type="checkbox" name="kid" value="all" checked> All kids</label>
-        {{range $kids}}<label class="check"><input type="checkbox" name="kid" value="{{.ID}}"> {{.Name}}</label>{{end}}
-        <button class="primary small">{{icon "plus"}} Subscribe</button>
-      </form>{{end}}
+  <div class="list-item">
+    <div class="li-head">
+      <div class="li-title"><b>{{.Title}}</b> {{if .Ages}}<span class="chip">ages {{.Ages}}</span>{{end}}</div>
+      {{if .Subscribed}}<div class="li-actions"><span class="pill ok">{{icon "check"}} subscribed</span></div>{{end}}
     </div>
+    <p class="li-desc">{{.Description}}</p>
+    {{if not .Subscribed}}
+    <form method="post" action="/filters/lists/subscribe" class="li-controls">
+      <input type="hidden" name="csrf" value="{{$csrf}}"><input type="hidden" name="url" value="{{.URL}}">
+      <select name="mode" aria-label="What this list does">
+        <option value="mixed" selected>Mixed (as the list marks each entry)</option>
+        <option value="block">Block everything (kid can ask)</option>
+        <option value="hide">Hide everything (never shown)</option>
+      </select>
+      <span class="li-kids"><span class="muted">for</span>
+        <label class="check"><input type="checkbox" name="kid" value="all" checked> All kids</label>
+        {{range $kids}}<label class="check"><input type="checkbox" name="kid" value="{{.ID}}"> {{.Name}}</label>{{end}}</span>
+      <button class="primary small li-go">{{icon "plus"}} Subscribe</button>
+    </form>{{end}}
   </div>
   {{end}}
 </section>
@@ -93,9 +92,9 @@
     <input type="hidden" name="csrf" value="{{$csrf}}">
     <input name="url" placeholder="https://…/my-list.txt" required class="grow">
     <select name="mode" aria-label="What this list does">
-          <option value="block" selected>Block (kid can ask)</option>
-          <option value="hide">Hide (never shown)</option>
-          <option value="mixed">Mixed (as the list marks it)</option>
+          <option value="mixed" selected>Mixed (as the list marks it)</option>
+          <option value="block">Block everything (kid can ask)</option>
+          <option value="hide">Hide everything (never shown)</option>
         </select>
     <label class="check"><input type="checkbox" name="kid" value="all" checked> All kids</label>
     {{range $kids}}<label class="check"><input type="checkbox" name="kid" value="{{.ID}}"> {{.Name}}</label>{{end}}

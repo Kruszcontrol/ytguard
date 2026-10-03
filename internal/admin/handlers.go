@@ -664,7 +664,8 @@ func (s *Server) settingsPage(w http.ResponseWriter, r *req) {
 		mqttStatus = s.MQTTStatus()
 	}
 	s.page(w, r, "settings", map[string]any{"S": st, "Host": r.Host, "DefaultCatalog": core.DefaultCatalogURL(),
-		"MQTTStatus": mqttStatus, "PCID": s.PCID})
+		"MQTTStatus": mqttStatus, "PCID": s.PCID, "DBSize": core.HumanSize(s.App.DatabaseSize()),
+		"HistoryDays": core.HistoryDays(st.HistoryDays)})
 }
 
 func (s *Server) settingsSave(w http.ResponseWriter, r *req) {
@@ -719,6 +720,7 @@ func (s *Server) settingsSave(w http.ResponseWriter, r *req) {
 	}
 	st.EmbedOrigins = strings.Join(origins, " ")
 	st.SessionDays = min(max(formInt(r, "session_days", 90), 1), 400)
+	st.HistoryDays = core.HistoryDays(formInt(r, "history_days", core.DefaultHistoryDays))
 	st.UpdateCheck = r.FormValue("update_check") == "on"
 	st.MQTTEnabled = r.FormValue("mqtt_enabled") == "on"
 	st.MQTTHost = strings.TrimSpace(r.FormValue("mqtt_host"))
@@ -802,6 +804,14 @@ func (s *Server) changed() {
 	if s.OnChange != nil {
 		s.OnChange()
 	}
+}
+
+func (s *Server) cleanupNow(w http.ResponseWriter, r *req) {
+	res, err := s.App.Cleanup()
+	if err == nil {
+		s.App.St.Audit("admin", r.IP, "cleanup", res.String())
+	}
+	back(w, r, "/settings", "Cleanup done: "+res.String()+".", err)
 }
 
 func (s *Server) checkUpdate(w http.ResponseWriter, r *req) {

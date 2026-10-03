@@ -95,11 +95,15 @@ func TestFilterLists(t *testing.T) {
 		return d.Outcome
 	}
 	creepy := rules.Meta{VideoID: "v1", Title: "Creepypasta story", Full: true}
-	if l.Mode != store.ListModeBlock {
+	if l.Mode != store.ListModeMixed {
 		t.Fatalf("default mode %q", l.Mode)
 	}
+	if got := decide(e.kid, creepy); got != rules.Hide { // the list marks it [hide deny]
+		t.Fatalf("mixed mode (default): %s", got)
+	}
+	e.post(fmt.Sprintf("/filters/lists/%d/options", l.ID), url.Values{"csrf": {csrf}, "enabled": {"on"}, "kid": {fmt.Sprint(e.kid.ID)}, "mode": {"block"}})
 	if got := decide(e.kid, creepy); got != rules.Block {
-		t.Fatalf("block mode (default): %s", got)
+		t.Fatalf("block mode: %s", got)
 	}
 	e.post(fmt.Sprintf("/filters/lists/%d/options", l.ID), url.Values{"csrf": {csrf}, "enabled": {"on"}, "kid": {fmt.Sprint(e.kid.ID)}, "mode": {"hide"}})
 	if got := decide(e.kid, creepy); got != rules.Hide {

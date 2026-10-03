@@ -51,18 +51,18 @@ const listCols = `id, url, title, description, ages, homepage, license, version,
 
 // List modes.
 const (
-	ListModeBlock = "block" // shown with a lock; the kid can ask (default)
+	ListModeMixed = "mixed" // as the list's author marked each entry (default)
+	ListModeBlock = "block" // shown with a lock; the kid can ask
 	ListModeHide  = "hide"  // never shown
-	ListModeMixed = "mixed" // as the list's author marked each entry
 )
 
 // ValidListMode returns m if valid, else the default.
 func ValidListMode(m string) string {
 	switch m {
-	case ListModeHide, ListModeMixed:
+	case ListModeHide, ListModeBlock:
 		return m
 	}
-	return ListModeBlock
+	return ListModeMixed
 }
 
 func scanList(row interface{ Scan(...any) error }) (FilterList, error) {

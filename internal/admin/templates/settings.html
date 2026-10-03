@@ -11,6 +11,7 @@
   <a href="#youtube">{{icon "video"}} YouTube API</a>
   <a href="#updates">{{icon "arrow-up"}} Updates</a>
   <a href="#logins">{{icon "key"}} Logins</a>
+  <a href="#storage">{{icon "box"}} Storage</a>
   <a href="#copy">{{icon "download"}} Copy filters</a>
 </nav>
 <div>
@@ -140,15 +141,24 @@
   <label style="max-width:320px">“Remember this device” lasts (days) <input name="session_days" type="number" min="1" max="400" value="{{$s.SessionDays}}" class="short"></label>
 </section>
 
+<section class="card" id="storage">
+  <div class="card-head"><h2>{{icon "box"}} Storage</h2>
+    <p>YTGuard cleans up once a day so it can't fill the disk. The database uses <b>{{.D.DBSize}}</b> right now.</p></div>
+  <label style="max-width:360px">Keep watch history and logs for (days) <input name="history_days" type="number" min="7" max="3650" value="{{.D.HistoryDays}}" class="short"></label>
+  <p class="muted small">Also always applied: unanswered requests expire after 30 days, the activity log keeps at most 5,000 entries, cached video details last 90 days,
+    and only the newest 3 database backups are kept. Reports sent to Home Assistant are shortened to fit its database (email gets the full report).</p>
+</section>
+
 <div class="savebar"><span class="muted small">Saves every section on this page.</span><button class="primary">{{icon "check"}} Save settings</button></div>
 </form>
 
 <section class="card" style="margin-top:1rem">
-  <div class="card-head"><h2>{{icon "bell"}} Test</h2><p>Save first, then send a test.</p></div>
+  <div class="card-head"><h2>{{icon "bell"}} Test &amp; maintenance</h2><p>Save first, then send a test.</p></div>
   <div class="row wrap">
     <form method="post" action="/settings/test-email" class="inline"><input type="hidden" name="csrf" value="{{.CSRF}}"><button>{{icon "mail"}} Send test email</button></form>
     <form method="post" action="/settings/test-ha" class="inline"><input type="hidden" name="csrf" value="{{.CSRF}}"><button>{{icon "home-assistant"}} Send test to Home Assistant</button></form>
     <form method="post" action="/settings/check-update" class="inline"><input type="hidden" name="csrf" value="{{.CSRF}}"><button>{{icon "refresh"}} Check for updates now</button></form>
+    <form method="post" action="/settings/cleanup" class="inline"><input type="hidden" name="csrf" value="{{.CSRF}}"><button>{{icon "trash"}} Clean up now</button></form>
   </div>
 </section>
 

@@ -55,6 +55,7 @@ type Bridge struct {
 	rediscover  chan struct{}
 
 	kidKeyPublished string
+	lastPayload     map[string]string // topic -> last retained state sent
 }
 
 // New creates a bridge.
@@ -120,6 +121,7 @@ func (b *Bridge) setStatus(st string) {
 // Run connects while MQTT is enabled, reconnecting as needed.
 func (b *Bridge) Run(ctx context.Context) {
 	backoff := 5 * time.Second
+	lastErr := ""
 	for ctx.Err() == nil {
 		s, _ := b.App.St.Settings()
 		if !s.MQTTEnabled || s.MQTTHost == "" {
@@ -137,11 +139,14 @@ func (b *Bridge) Run(ctx context.Context) {
 		}
 		if err != nil {
 			b.setStatus("not connected: " + err.Error())
-			slog.Warn("mqtt", "err", err)
+			if err.Error() != lastErr { // don't fill the log while the broker is down
+				slog.Warn("mqtt (retrying quietly)", "err", err)
+				lastErr = err.Error()
+			}
 			b.wait(ctx, backoff)
 			backoff = min(backoff*2, 2*time.Minute)
 		} else {
-			backoff = 5 * time.Second
+			backoff, lastErr = 5*time.Second, ""
 		}
 	}
 }
@@ -175,6 +180,7 @@ func (b *Bridge) session(ctx context.Context, s store.Settings) error {
 	}
 	b.mu.Lock()
 	b.c, b.base, b.connectedAt = c, base, time.Now()
+	b.lastPayload = nil // new connection: send everything again
 	b.mu.Unlock()
 	defer func() {
 		b.mu.Lock()
@@ -213,6 +219,9 @@ func (b *Bridge) session(ctx context.Context, s store.Settings) error {
 				c.Close()
 				return err
 			}
+			b.mu.Lock()
+			b.lastPayload = nil // Home Assistant restarted: send all state again
+			b.mu.Unlock()
 		case <-b.kick:
 		case <-t.C:
 		}
@@ -286,7 +295,7 @@ func (b *Bridge) publishState(c *mqtt.Client, base string) error {
 			k.VideoURL = "https://www.youtube.com/watch?v=" + ks.LastVideo.VideoID
 		}
 		pending += ks.Pending
-		if err := publishJSON(c, fmt.Sprintf("%s/kid/%d/state", base, ks.Kid.ID), k, true); err != nil {
+		if err := b.publishChanged(c, fmt.Sprintf("%s/kid/%d/state", base, ks.Kid.ID), k); err != nil {
 			return err
 		}
 	}
@@ -295,13 +304,38 @@ func (b *Bridge) publishState(c *mqtt.Client, base string) error {
 	if latest == "" || !u.Available {
 		latest = ytguard.Version
 	}
-	if err := publishJSON(c, base+"/update", map[string]any{"installed_version": ytguard.Version, "latest_version": latest,
-		"title": "YTGuard", "release_url": u.URL, "release_summary": truncate(u.Notes, 250)}, true); err != nil {
+	if err := b.publishChanged(c, base+"/update", map[string]any{"installed_version": ytguard.Version, "latest_version": latest,
+		"title": "YTGuard", "release_url": u.URL, "release_summary": truncate(u.Notes, 250)}); err != nil {
 		return err
 	}
 	s, _ := b.App.St.Settings()
-	return publishJSON(c, base+"/state", map[string]any{"pc": s.PCName, "pc_id": b.PCID, "version": ytguard.Version,
-		"pending_requests": pending, "other_apps": len(b.App.ActiveFindings()), "kids": len(states)}, true)
+	return b.publishChanged(c, base+"/state", map[string]any{"pc": s.PCName, "pc_id": b.PCID, "version": ytguard.Version,
+		"pending_requests": pending, "other_apps": len(b.App.ActiveFindings()), "kids": len(states)})
+}
+
+// publishChanged sends a retained state only when it changed, so Home
+// Assistant isn't asked to record identical values every 20 seconds.
+func (b *Bridge) publishChanged(c *mqtt.Client, topic string, v any) error {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b.mu.Lock()
+	same := b.lastPayload[topic] == string(data)
+	b.mu.Unlock()
+	if same {
+		return nil
+	}
+	if err := c.Publish(topic, data, true); err != nil {
+		return err
+	}
+	b.mu.Lock()
+	if b.lastPayload == nil {
+		b.lastPayload = map[string]string{}
+	}
+	b.lastPayload[topic] = string(data)
+	b.mu.Unlock()
+	return nil
 }
 
 func publishJSON(c *mqtt.Client, topic string, v any, retain bool) error {

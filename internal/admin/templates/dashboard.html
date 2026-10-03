@@ -22,10 +22,11 @@
   </div>
   {{range .D.Pending}}
   <div class="request">
+    <div class="req-who">{{icon "user"}} <b>{{.KidName}}</b> wants to watch <span class="muted small">· asked {{datetime .CreatedAt}}</span></div>
     <a class="video" href="{{watch .VideoID}}" target="_blank" rel="noopener">
       <img src="{{thumb .VideoID}}" alt="" loading="lazy">
       <span><b>{{.Title}}</b>
-        <span class="muted small">{{.ChannelName}} · <b>{{.KidName}}</b> asked {{datetime .CreatedAt}}</span>
+        <span class="muted small">{{.ChannelName}}</span>
         {{if .Message}}<br><span class="quote">“{{.Message}}”</span>{{end}}
         <br><span class="muted small">Blocked by: {{.Reason}}</span></span>
     </a>

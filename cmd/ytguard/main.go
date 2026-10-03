@@ -256,6 +256,7 @@ func serve(args []string) error {
 		return err
 	}
 	app := core.New(st)
+	app.DataDir = *data
 	au := auth.New(st)
 	if _, _, err := st.Admin(); errors.Is(err, store.ErrNotFound) {
 		slog.Warn("no parent login yet; run: sudo ytguard passwd --data " + *data)
@@ -312,6 +313,7 @@ func serve(args []string) error {
 	go app.Updates.Run(ctx)
 	go app.RunAppMonitor(ctx, "/proc")
 	go app.RunListUpdater(ctx)
+	go app.RunMaintenance(ctx)
 	go bridge.Run(ctx)
 	slog.Info("ytguard starting", "version", ytguard.Version, "repo", ytguard.Repo, "schema", store.SchemaVersion())
 	go func() {

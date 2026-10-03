@@ -7,8 +7,7 @@
     <input type="hidden" name="next" value="{{.D.Next}}">
     <label>Username <input name="username" autocomplete="username" required autofocus value="{{.D.Username}}"></label>
     <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
-    <label class="switch"><input type="checkbox" name="remember" checked> Remember this device</label>
-    <label>Device name <input name="device" value="{{.D.Device}}" maxlength="60"><small class="muted">Shown under Security → Devices, so you can sign it out later.</small></label>
+    <label class="switch"><input type="checkbox" name="remember" checked> Remember this device <small class="muted">— rename or sign it out later under Security</small></label>
     <button class="primary">Log in</button>
   </form>
 </div>

@@ -96,7 +96,9 @@ func Open(dir string) (*Store, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
-	dsn := "file:" + filepath.Join(dir, "ytguard.db") + "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)"
+	// journal_size_limit stops the write-ahead log file staying large
+	// after a burst of writes.
+	dsn := "file:" + filepath.Join(dir, "ytguard.db") + "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=journal_size_limit(67108864)"
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, err
@@ -146,6 +148,12 @@ var migrations = []func(tx *sql.Tx) error{
 	// 4: per-subscription behaviour (block / hide / mixed).
 	func(tx *sql.Tx) error {
 		_, err := tx.Exec(`ALTER TABLE lists ADD COLUMN mode TEXT NOT NULL DEFAULT 'block'`)
+		return err
+	},
+	// 5: the default became "mixed" (the list author's marking); move
+	// subscriptions that only had the old default.
+	func(tx *sql.Tx) error {
+		_, err := tx.Exec(`UPDATE lists SET mode='mixed' WHERE mode='block'`)
 		return err
 	},
 }
@@ -236,6 +244,7 @@ type Settings struct {
 	UpdateCheck    bool   `json:"updateCheck"`    // check GitHub for new releases
 	AppScan        bool   `json:"appScan"`        // look for other browsers / video apps
 	ListCatalogURL string `json:"listCatalogURL"` // "" = this build's default catalog
+	HistoryDays    int    `json:"historyDays"`    // how long to keep watch history and logs (0 = default)
 
 	// Home Assistant over MQTT.
 	MQTTEnabled   bool   `json:"mqttEnabled"`

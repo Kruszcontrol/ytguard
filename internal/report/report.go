@@ -211,6 +211,43 @@ func (r Report) HTML() (string, error) {
 	return b.String(), err
 }
 
+// Limits for reports sent to Home Assistant, whose database won't store
+// state attributes over 16 KB; email gets the full report.
+const (
+	haMaxVideos   = 100
+	haMaxAttempts = 50
+	haMaxText     = 6000
+)
+
+// HAPayload is the (size-limited) report sent to Home Assistant.
+func HAPayload(pc string, r Report) map[string]any {
+	trimmed := r
+	more := 0
+	if len(trimmed.Videos) > haMaxVideos {
+		more = len(trimmed.Videos) - haMaxVideos
+		trimmed.Videos = trimmed.Videos[:haMaxVideos]
+	}
+	if len(trimmed.Blocked) > haMaxAttempts {
+		trimmed.Blocked = trimmed.Blocked[:haMaxAttempts]
+	}
+	if len(trimmed.Hidden) > haMaxAttempts {
+		trimmed.Hidden = trimmed.Hidden[:haMaxAttempts]
+	}
+	videos := make([]Video, len(trimmed.Videos))
+	for i, v := range trimmed.Videos {
+		v.Thumb = "" // derivable from the URL; saves space
+		videos[i] = v
+	}
+	trimmed.Videos = videos
+	text := r.Text()
+	if len(text) > haMaxText {
+		text = text[:haMaxText] + "\n… (shortened; the full report is in YTGuard's History page)"
+	}
+	return map[string]any{"type": "daily_report", "pc": pc, "kid": r.Kid, "date": r.Date,
+		"summary": fmt.Sprintf("%s watched %d min (%d videos) on %s", r.Kid, r.TotalMin, len(r.Videos), r.Date),
+		"text":    text, "report": trimmed, "videos_not_included": more}
+}
+
 // Send delivers a report through every enabled channel. It returns nil if
 // at least one channel succeeded (or none are enabled).
 // mqtt, if not nil, also delivers the report to Home Assistant over MQTT.
@@ -228,9 +265,7 @@ func Send(ctx context.Context, s store.Settings, r Report, mqtt func(kind string
 			sent++
 		}
 	}
-	payload := map[string]any{"type": "daily_report", "pc": s.PCName, "kid": r.Kid, "date": r.Date,
-		"summary": fmt.Sprintf("%s watched %d min (%d videos) on %s", r.Kid, r.TotalMin, len(r.Videos), r.Date),
-		"text":    r.Text(), "report": r}
+	payload := HAPayload(s.PCName, r)
 	if s.ReportHA && s.HAWebhookURL != "" {
 		if err := notify.HA(ctx, s.HAWebhookURL, s.HAInsecureTLS, payload); err != nil {
 			errs = append(errs, "home assistant webhook: "+err.Error())

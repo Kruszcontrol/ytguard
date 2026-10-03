@@ -5,6 +5,7 @@ package admin
 
 import (
 	"bufio"
+	"context"
 	"crypto/sha256"
 	"crypto/subtle"
 	"embed"
@@ -140,6 +141,7 @@ func (s *Server) Handler() http.Handler {
 	page("POST /settings/test-email", s.testEmail)
 	page("POST /settings/test-ha", s.testHA)
 	page("POST /settings/check-update", s.checkUpdate)
+	page("POST /settings/cleanup", s.cleanupNow)
 	page("GET /export", s.export)
 	page("POST /import", s.importRules)
 	page("GET /security", s.securityPage)
@@ -257,7 +259,7 @@ func (s *Server) setCookie(w http.ResponseWriter, value string, expires time.Tim
 }
 
 func (s *Server) loginPage(w http.ResponseWriter, r *http.Request) {
-	s.render(w, r, "login", nil, map[string]any{"Next": safeNext(r.URL.Query().Get("next")), "Device": guessDevice(r.UserAgent()), "Username": "", "Error": ""})
+	s.render(w, r, "login", nil, map[string]any{"Next": safeNext(r.URL.Query().Get("next")), "Username": "", "Error": ""})
 }
 
 func (s *Server) loginPost(w http.ResponseWriter, r *http.Request) {
@@ -266,7 +268,7 @@ func (s *Server) loginPost(w http.ResponseWriter, r *http.Request) {
 	user, pw := r.FormValue("username"), r.FormValue("password")
 	remember := r.FormValue("remember") == "on"
 	next := safeNext(r.FormValue("next"))
-	data := map[string]any{"Next": next, "Device": r.FormValue("device"), "Username": user}
+	data := map[string]any{"Next": next, "Username": user, "Error": ""}
 	if err := s.Auth.Login(user, pw, ip); err != nil {
 		s.App.St.Audit(user, ip, "login failed", err.Error())
 		data["Error"] = err.Error()
@@ -275,10 +277,7 @@ func (s *Server) loginPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	st, _ := s.App.St.Settings()
-	device := strings.TrimSpace(r.FormValue("device"))
-	if device == "" {
-		device = guessDevice(r.UserAgent())
-	}
+	device := deviceName(r.Context(), r.UserAgent(), ip)
 	tok, se, err := s.Auth.NewSession(truncate(device, 60), ip, truncate(r.UserAgent(), 200), remember, st.SessionDays)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
@@ -303,26 +302,78 @@ func safeNext(n string) string {
 	return n
 }
 
+// deviceName names a new login's device without asking: browser and system
+// from the User-Agent, plus the device's network name when the local DNS
+// (usually the router) knows it, e.g. "Chrome on Android (pixel-8)". It can
+// be renamed under Security.
+func deviceName(ctx context.Context, ua, ip string) string {
+	name := guessDevice(ua)
+	if host := lanHostname(ctx, ip); host != "" {
+		name += " (" + host + ")"
+	}
+	return truncate(name, 60)
+}
+
 func guessDevice(ua string) string {
-	os := "Browser"
+	sys := "a computer"
 	switch {
 	case strings.Contains(ua, "Android"):
-		os = "Android"
+		sys = "Android"
 	case strings.Contains(ua, "iPhone"):
-		os = "iPhone"
+		sys = "iPhone"
 	case strings.Contains(ua, "iPad"):
-		os = "iPad"
+		sys = "iPad"
+	case strings.Contains(ua, "CrOS"):
+		sys = "ChromeOS"
 	case strings.Contains(ua, "Windows"):
-		os = "Windows"
+		sys = "Windows"
 	case strings.Contains(ua, "Mac OS"):
-		os = "Mac"
+		sys = "Mac"
 	case strings.Contains(ua, "Linux"):
-		os = "Linux"
+		sys = "Linux"
 	}
 	if strings.Contains(ua, "HomeAssistant") || strings.Contains(ua, "Home Assistant") {
-		return "Home Assistant app (" + os + ")"
+		return "Home Assistant app on " + sys
 	}
-	return os
+	browser := "Browser"
+	switch {
+	case strings.Contains(ua, "Edg/"), strings.Contains(ua, "EdgA/"):
+		browser = "Edge"
+	case strings.Contains(ua, "SamsungBrowser"):
+		browser = "Samsung Internet"
+	case strings.Contains(ua, "OPR/"):
+		browser = "Opera"
+	case strings.Contains(ua, "Firefox/"), strings.Contains(ua, "FxiOS"):
+		browser = "Firefox"
+	case strings.Contains(ua, "CriOS"), strings.Contains(ua, "Chrome/"):
+		browser = "Chrome"
+	case strings.Contains(ua, "Safari/"):
+		browser = "Safari"
+	}
+	return browser + " on " + sys
+}
+
+// lanHostname asks DNS for the client's name (short form), giving up
+// quickly so logging in never stalls.
+func lanHostname(ctx context.Context, ip string) string {
+	addr := net.ParseIP(ip)
+	if addr == nil || addr.IsLoopback() {
+		return ""
+	}
+	ctx, cancel := context.WithTimeout(ctx, 1200*time.Millisecond)
+	defer cancel()
+	names, err := net.DefaultResolver.LookupAddr(ctx, ip)
+	if err != nil || len(names) == 0 {
+		return ""
+	}
+	host := strings.TrimSuffix(names[0], ".")
+	if i := strings.IndexByte(host, '.'); i > 0 {
+		host = host[:i]
+	}
+	if host == "" || strings.EqualFold(host, "localhost") || net.ParseIP(host) != nil || strings.Count(host, "-") > 4 {
+		return "" // ISP-style names like 192-168-1-5 aren't useful
+	}
+	return host
 }
 
 // ---- themes ----

@@ -131,7 +131,7 @@ Under **Filters → Lists** you can subscribe to lists that other people maintai
 The recommended lists come from [Kruszcontrol/ytguard-lists](https://github.com/Kruszcontrol/ytguard-lists): scary/horror, violence, mature content, dangerous challenges, gambling and scams, and basics for young kids, with suggested ages.
 You can also subscribe to any https:// address.
 
-- **Block or hide:** for each list choose **Block** (the default: matching videos show with a lock and the kid can ask), **Hide** (never shown) or **Mixed** (the list author's choice per entry).
+- **Mixed, block or hide:** for each list choose **Mixed** (the default: the list author's marking per entry, so clearly inappropriate videos are hidden and borderline ones are blocked so the kid can ask), **Block everything** or **Hide everything**.
 - **Your own entries win** over a list's entry of the same type. The usual order still applies (video → channel → keyword → category → attribute). So to undo a list's channel entry, add that channel (or a video) yourself; a broad keyword Allow won't unhide a channel a list hides.
 - The Rule tester and History say which list made a decision, and the Tester has one-click **Allow this video / channel** overrides.
 - Lists are checked for updates daily. If a download fails, the previous copy stays in use. Lines a list gets wrong are skipped and shown as warnings.
@@ -198,6 +198,10 @@ sudo dpkg-statoverride --update --add root browser-adults 0750 /usr/lib/firefox/
 ```
 
 The first removes a Flatpak a kid installed, the second deletes a portable copy, and the third makes Mint's Firefox usable only by members of the `browser-adults` group (see Install). To stop kids running programs from their home folders at all, mount `/home` with `noexec`. Detection goes by program names, so a renamed browser can slip through.
+
+### Storage
+
+YTGuard cleans up once a day so it can't fill the disk: watch history, blocked attempts and the activity log are kept for 365 days (Settings → Storage), unanswered requests expire after 30 days, cached video details after 90, the activity log never exceeds 5,000 entries, and only the newest 3 database backups are kept. Reports sent to Home Assistant are shortened to fit its database (email gets the full report), and MQTT only sends values that changed. The service's own log goes to the system journal, which Linux already caps.
 
 ### Reports
 

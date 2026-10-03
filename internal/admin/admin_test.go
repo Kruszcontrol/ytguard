@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
@@ -234,3 +235,20 @@ func TestSafeNext(t *testing.T) {
 }
 
 func itoa(n int64) string { return strconv.FormatInt(n, 10) }
+
+func TestGuessDevice(t *testing.T) {
+	for ua, want := range map[string]string{
+		"Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Mobile Safari/537.36":                       "Chrome on Android",
+		"Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1": "Safari on iPhone",
+		"Mozilla/5.0 (X11; Linux x86_64; rv:131.0) Gecko/20100101 Firefox/131.0":                                                                  "Firefox on Linux",
+		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Safari/537.36 Edg/129.0":                   "Edge on Windows",
+		"Mozilla/5.0 (Linux; Android 14) Home Assistant/2024.10":                                                                                  "Home Assistant app on Android",
+	} {
+		if got := guessDevice(ua); got != want {
+			t.Errorf("%q -> %q, want %q", ua[:40], got, want)
+		}
+	}
+	if lanHostname(context.Background(), "127.0.0.1") != "" {
+		t.Error("loopback named")
+	}
+}

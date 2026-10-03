@@ -23,6 +23,7 @@ import (
 // App is the running application.
 type App struct {
 	St      *store.Store
+	DataDir string // for database size and backup cleanup ("" in tests)
 	YT      *ytmeta.Client
 	Updates *update.Checker
 	Now     func() time.Time
@@ -371,6 +372,7 @@ func (a *App) Event(kind string, data map[string]any) {
 	for k, v := range data {
 		payload[k] = v
 	}
+	trimPayload(payload)
 	if s.HAWebhookURL != "" {
 		go func() {
 			if err := notify.HA(context.Background(), s.HAWebhookURL, s.HAInsecureTLS, payload); err != nil {
@@ -381,6 +383,16 @@ func (a *App) Event(kind string, data map[string]any) {
 	if a.MQTT != nil {
 		if err := a.MQTT(kind, payload); err != nil && !errors.Is(err, ErrMQTTOff) {
 			slog.Warn("mqtt event", "type", kind, "err", err)
+		}
+	}
+}
+
+// trimPayload shortens long free-text fields so events stay small in Home
+// Assistant's database.
+func trimPayload(p map[string]any) {
+	for k, v := range p {
+		if s, ok := v.(string); ok && len(s) > 1000 {
+			p[k] = truncate(s, 1000)
 		}
 	}
 }

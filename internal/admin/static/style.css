@@ -361,7 +361,9 @@ form.inline { display: inline; }
 main { overflow-wrap: anywhere; }
 .card, .grid > * { min-width: 0; }
 .request .actions { margin: 0; }
-.quote { font-style: italic; color: var(--text); background: var(--surface-2); border-left: 3px solid var(--accent); padding: .1rem .5rem; border-radius: 4px; display: inline-block; margin-top: .25rem; }
+.req-who { flex-basis: 100%; display: flex; align-items: center; gap: .4rem; font-size: 1rem; margin-bottom: -.2rem; }
+.req-who b { font-size: 1.05rem; }
+.quote {font-style: italic; color: var(--text); background: var(--surface-2); border-left: 3px solid var(--accent); padding: .1rem .5rem; border-radius: 4px; display: inline-block; margin-top: .25rem; }
 
 /* ---------- tables ---------- */
 .scroll { overflow-x: auto; }
@@ -460,3 +462,23 @@ ul.rules li:first-child { border-top: 0; }
 a.kid-link { display: block; text-decoration: none; color: var(--text); transition: border-color .12s, transform .12s; }
 a.kid-link:hover { border-color: var(--accent); transform: translateY(-1px); color: var(--text); }
 a.kid-link h2 { margin: 0 0 .6rem; }
+
+/* filter list entries: fixed positions regardless of text length */
+.list-item { padding: 1rem 0; border-top: 1px solid var(--border); }
+.list-item:first-of-type { border-top: 0; padding-top: .2rem; }
+.li-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .5rem 1rem; align-items: start; }
+.li-title { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .5rem; font-size: 1.02rem; min-height: 2rem; }
+.li-title a { color: var(--text); text-decoration: none; }
+.li-title a:hover { color: var(--accent-text); text-decoration: underline; }
+.li-actions { display: flex; gap: .4rem; justify-content: flex-end; }
+.li-actions form { display: contents; }
+.li-desc { margin: .35rem 0 .3rem; color: var(--muted); font-size: .9rem; max-width: 75ch; }
+.li-meta { font-size: .84rem; color: var(--muted); margin-bottom: .3rem; }
+.li-controls { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .9rem; margin-top: .6rem; padding: .55rem .7rem; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border); font-size: .9rem; }
+.li-controls select { padding: .35rem .55rem; font-size: .88rem; }
+.li-kids { display: inline-flex; flex-wrap: wrap; align-items: center; gap: .3rem .8rem; }
+.li-go { margin-left: auto; }
+@media (max-width: 640px) {
+  .li-head { grid-template-columns: 1fr; }
+  .li-actions { justify-content: flex-start; }
+}
