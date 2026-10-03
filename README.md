@@ -8,7 +8,8 @@ Family YouTube controls for Linux Mint (or any systemd Linux) + Google Chrome.
 - **Time controls** per kid and weekday: daily minutes, allowed hours, enforced breaks (e.g. every 20 min watching → 10 min pause), bonus time, pause now.
 - **Approval requests**: the kid taps "Ask a parent"; you approve the video or its whole channel from the web UI or a Home Assistant phone notification.
 - **Daily report** per kid of every video watched, plus blocked/hidden attempts, by **email** and/or **Home Assistant**.
-- **Remote web UI** on each PC (HTTPS, app password, "remember this device"), and a **REST API** with scoped tokens for Home Assistant.
+- **Remote web UI** on each PC (HTTPS, app password, "remember this device").
+- **Home Assistant**: over MQTT, each PC and each kid appear automatically as devices (time used/left, watching now, pause switch, +time buttons, update notices). A ready-made blueprint sends approval requests to your phone with Allow/Deny buttons, for every PC. A webhook and a REST API with scoped tokens are there as an alternative.
 
 ## How it works
 
@@ -198,7 +199,7 @@ The first removes a Flatpak a kid installed, the second deletes a portable copy,
 
 ### Reports
 
-Sent daily at the configured time (default 20:30). If the PC is off then, the report goes out at the next start. Email works with any SMTP server. For Gmail, use an app password with `smtp.gmail.com:587` and STARTTLS. Home Assistant receives it as a webhook event. See [docs/home-assistant.md](docs/home-assistant.md).
+Sent daily at the configured time (default 20:30). If the PC is off then, the report goes out at the next start. Email works with any SMTP server. For Gmail, use an app password with `smtp.gmail.com:587` and STARTTLS. Home Assistant receives it as a `daily_report` event (MQTT or webhook). See [docs/home-assistant.md](docs/home-assistant.md).
 
 ## Authentication
 
@@ -288,6 +289,9 @@ internal/install/     installer, upgrade, Chrome policy, systemd unit, certifica
 internal/update/      GitHub release check + verified download
 internal/appscan/     detection of other browsers / video apps
 internal/filterlist/  shared filter list format, download, catalog
+internal/mqtt/        minimal MQTT 3.1.1 client
+internal/hamqtt/      Home Assistant MQTT discovery, state and commands
+docs/blueprints/      Home Assistant blueprint (notifications + approvals)
 extension/            Chrome MV3 extension (packed and signed by the daemon at start)
 ```
 

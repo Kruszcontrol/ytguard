@@ -39,16 +39,40 @@
   </fieldset>
   <fieldset>
     <legend><label class="check"><input type="checkbox" name="report_ha" {{if $s.ReportHA}}checked{{end}}> Home Assistant</label></legend>
-    <p class="muted small">Sends the report to the webhook below as a <code>daily_report</code> event.</p>
+    <p class="muted small">Sends the report as a <code>daily_report</code> event over MQTT and/or the webhook (set up below).</p>
   </fieldset>
 </div>
-<div class="card">
+<div class="card" id="homeassistant">
   <h2>Home Assistant</h2>
+  <fieldset>
+    <legend><label class="check"><input type="checkbox" name="mqtt_enabled" {{if $s.MQTTEnabled}}checked{{end}}> MQTT (recommended)</label></legend>
+    <p class="muted small">This PC and each kid appear in Home Assistant automatically, as devices with sensors, a pause switch and +time buttons.
+      Use the broker Home Assistant uses (e.g. the Mosquitto add-on) and a dedicated MQTT user.
+      Status: <b>{{.D.MQTTStatus}}</b> · this PC's ID: <code>{{.D.PCID}}</code></p>
+    <div class="two">
+      <label>Broker address <input name="mqtt_host" value="{{$s.MQTTHost}}" placeholder="homeassistant.local"></label>
+      <label>Port <input name="mqtt_port" type="number" value="{{$s.MQTTPort}}" class="short"></label>
+      <label>Username <input name="mqtt_user" value="{{$s.MQTTUser}}" autocomplete="off"></label>
+      <label>Password <input name="mqtt_pass" type="password" placeholder="{{if $s.MQTTPass}}(saved — leave blank to keep){{end}}" autocomplete="new-password">
+        {{if $s.MQTTPass}}<span class="check small"><input type="checkbox" name="mqtt_pass_clear"> clear</span>{{end}}</label>
+    </div>
+    <label class="check"><input type="checkbox" name="mqtt_tls" {{if $s.MQTTTLS}}checked{{end}}> Use TLS (usually port 8883)</label>
+    <label class="check"><input type="checkbox" name="mqtt_insecure" {{if $s.MQTTInsecure}}checked{{end}}> Broker uses a self-signed certificate (skip verification)</label>
+    <details><summary class="small">Advanced</summary>
+      <div class="two">
+        <label>Topic prefix <input name="mqtt_base" value="{{$s.MQTTBase}}" class="short"><small class="muted">Same on every PC (each PC adds its ID).</small></label>
+        <label>Discovery prefix <input name="mqtt_discovery" value="{{$s.MQTTDiscovery}}" class="short"><small class="muted">Home Assistant's, normally <code>homeassistant</code>.</small></label>
+      </div>
+    </details>
+  </fieldset>
+  <fieldset>
+    <legend>Webhook (alternative without MQTT)</legend>
   <label>Webhook URL <input name="ha_webhook" placeholder="{{if $s.HAWebhookURL}}(saved — leave blank to keep){{else}}http://homeassistant.local:8123/api/webhook/ytguard-…{{end}}" autocomplete="off">
     {{if $s.HAWebhookURL}}<span class="check small"><input type="checkbox" name="ha_webhook_clear"> clear</span>{{end}}</label>
-  <label class="check"><input type="checkbox" name="ha_events" {{if $s.HAEvents}}checked{{end}}> Send instant events: approval requests, time's up, parent logins</label>
   <label class="check"><input type="checkbox" name="ha_insecure" {{if $s.HAInsecureTLS}}checked{{end}}> Home Assistant uses a self-signed HTTPS certificate (skip verification)</label>
-  <p class="muted small">For sensors and buttons in Home Assistant (time left, +15 min, approve requests) create an API token under Security. See docs/home-assistant.md.</p>
+  <p class="muted small">Without MQTT, sensors and buttons need an API token (Security) and YAML; see docs/home-assistant.md.</p>
+  </fieldset>
+  <label class="check"><input type="checkbox" name="ha_events" {{if $s.HAEvents}}checked{{end}}> Send instant events (MQTT and/or webhook): approval requests, time's up, other browsers found, updates, parent logins</label>
   <label>Allow showing this UI inside these sites (iframe)
     <input name="embed_origins" value="{{$s.EmbedOrigins}}" placeholder="https://homeassistant.local:8123">
     <small class="muted">Space-separated. Leave empty unless you use a Home Assistant Webpage card. Some phone apps block logins inside iframes; a dashboard button that opens this page is more reliable.</small></label>

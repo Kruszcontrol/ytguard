@@ -1,5 +1,108 @@
 # Home Assistant integration
 
+There are two ways to connect YTGuard PCs to Home Assistant:
+
+- **MQTT (recommended).** Each PC shows up in Home Assistant automatically, with sensors, switches and buttons and no YAML. One automation handles approvals for every PC. Needs an MQTT broker; most Home Assistant installs already have the Mosquitto add-on.
+- **Webhook + REST API.** No broker needed, but you configure sensors and buttons in YAML for each PC. See [Without MQTT](#without-mqtt-webhook--rest-api).
+
+Both can be used at the same time.
+
+## MQTT setup
+
+### 1. Broker and a user for YTGuard
+
+1. In Home Assistant: **Settings → Add-ons → Mosquitto broker**. Install it if it isn't already, and make sure the **MQTT** integration is set up.
+2. Create a login for YTGuard. Either add a Home Assistant user (**Settings → People → Users**, e.g. `ytguard`; it doesn't need admin rights), or add it under the Mosquitto add-on's **Configuration → Logins**.
+   One login can be shared by all PCs, or use one per PC so you can revoke them separately.
+   Don't allow anonymous access to the broker: anyone who can publish to it can press YTGuard's buttons.
+
+### 2. Each YTGuard PC
+
+On each PC's YTGuard page: **Settings → Home Assistant**:
+
+- tick **MQTT**;
+- **Broker address**: your Home Assistant's address (e.g. `homeassistant.local` or its IP), **port** `1883` (or `8883` with **Use TLS**);
+- the **username** and **password** from step 1;
+- tick **Send instant events**, and under **Daily report** tick **Home Assistant** if you want reports in HA;
+- **Save**. The status line should change to "connected since …" within a few seconds.
+
+Each PC gets its own ID (shown next to the status), so any number of PCs can share one broker without clashing.
+
+### 3. What appears in Home Assistant
+
+Under **Settings → Devices & services → MQTT** you'll find:
+
+**One device per PC**, "YTGuard <PC name>":
+
+| Entity | What it is |
+|---|---|
+| Pending requests | number of "Ask a parent" requests waiting |
+| Other browsers found | browsers/video apps YTGuard found on that PC |
+| YTGuard (update) | shows in **Settings → Updates** when a new release is out (install it on the PC with `sudo ytguard upgrade`) |
+| Events | fires on approval requests, time up, other browsers found, updates, daily reports, logins |
+
+**One device per kid**, "<Kid> YouTube", linked to their PC:
+
+| Entity | What it is |
+|---|---|
+| Time used today / Time left today | minutes ("Time left" is unavailable if the day is unlimited) |
+| Break in | minutes until the next enforced break (unavailable if no breaks) |
+| YouTube state | `watching`, `idle`, `break`, `time_up`, `locked`, `outside_window` or `none_today` |
+| Watching | the current video's title (attributes: channel, link) |
+| Watching now | on while a video is playing |
+| Videos today | count |
+| Pause YouTube | switch: on = YouTube paused for the rest of the day |
+| Add 15 minutes / Add 30 minutes / End break | buttons |
+
+If a PC is switched off or YTGuard stops, its entities show as unavailable.
+
+### 4. Phone notifications and approvals (blueprint)
+
+Import the blueprint (one automation covers every PC):
+
+[![Import blueprint](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2FKruszcontrol%2Fytguard%2Fblob%2Fmain%2Fdocs%2Fblueprints%2Fytguard_notifications.yaml)
+
+Or **Settings → Automations & scenes → Blueprints → Import blueprint** with
+`https://github.com/Kruszcontrol/ytguard/blob/main/docs/blueprints/ytguard_notifications.yaml`.
+
+Create an automation from it, pick your phone, and choose which other alerts you want (time up, other browsers, updates, daily reports).
+When a kid asks to watch something, your phone shows the video with **Allow video**, **Allow channel** and **Deny** buttons. The answer goes straight back to the PC the request came from.
+
+### Example dashboard card
+
+```yaml
+type: entities
+title: Alice — YouTube
+entities:
+  - entity: sensor.alice_youtube_youtube_state
+  - entity: sensor.alice_youtube_watching
+  - entity: sensor.alice_youtube_time_used_today
+  - entity: sensor.alice_youtube_time_left_today
+  - entity: switch.alice_youtube_pause_youtube
+  - entity: button.alice_youtube_add_15_minutes
+  - entity: button.alice_youtube_end_break
+```
+
+(Entity IDs are made from the device and entity names; check them under the device page.)
+
+### MQTT topics (for your own automations)
+
+`<prefix>` is `ytguard` unless changed; `<pc>` is the PC's ID.
+
+| Topic | Direction | Content |
+|---|---|---|
+| `<prefix>/<pc>/status` | YTGuard → | `online` / `offline` |
+| `<prefix>/<pc>/state` | YTGuard → | PC JSON: `pc`, `version`, `pending_requests`, `other_apps` |
+| `<prefix>/<pc>/kid/<id>/state` | YTGuard → | kid JSON: `used_minutes`, `remaining_minutes`, `state`, `watching`, `video_title`, `locked`, … |
+| `<prefix>/<pc>/event` | YTGuard → | `{"event_type": "approval_request", "kid": …, "approve_topic": …}` etc. |
+| `<prefix>/<pc>/kid/<id>/cmd` | → YTGuard | `bonus:15`, `lock:60` (0 = rest of today), `unlock`, `end_break` |
+| `<prefix>/<pc>/kid/<id>/pause/set` | → YTGuard | `ON` / `OFF` |
+| `<prefix>/<pc>/request/<id>/set` | → YTGuard | `approve_video`, `approve_channel`, `deny` |
+
+Event payloads have the same fields as the webhook payloads below, plus `event_type` and `pc_id`.
+
+## Without MQTT: webhook + REST API
+
 YTGuard talks to Home Assistant in two directions:
 
 | Direction | How | Used for |
@@ -8,8 +111,9 @@ YTGuard talks to Home Assistant in two directions:
 | HA → YTGuard | REST API with a scoped **API token** | sensors (time used/left, watching now, pending requests), bonus time, pause, approve/deny |
 
 Each kid PC runs its own YTGuard, so repeat the steps below per PC (examples use a PC called `kidpc`).
+With several PCs, MQTT is much less work.
 
-## 1. Webhook (YTGuard → HA)
+### 1. Webhook (YTGuard → HA)
 
 1. Pick a long random webhook ID, e.g. `ytguard-kidpc-8f3k2m9q7x`.
 2. In YTGuard: **Settings → Home Assistant → Webhook URL**:
@@ -28,7 +132,7 @@ Payloads (all have `type`, `pc`, `time`):
 - `unapproved_app`: `kid` ("Everyone on this PC" for system-wide installs), `app`, `kind` (`running`/`installed`), `how`, `where`, `message` (sent once per new finding)
 - `test`: `summary`
 
-## 2. API token (HA → YTGuard)
+### 2. API token (HA → YTGuard)
 
 In YTGuard: **Security → API tokens**, name it "Home Assistant", keep **read** and **control** ticked (leave **admin** off unless you want HA to edit filters). Copy the token — it's shown once.
 
@@ -38,7 +142,7 @@ In YTGuard: **Security → API tokens**, name it "Home Assistant", keep **read**
 ytguard_kidpc_auth: "Bearer ytg_PASTE_TOKEN_HERE"
 ```
 
-## 3. Sensors and commands
+### 3. Sensors and commands
 
 `configuration.yaml` (replace `Alice` with the kid's name as shown in YTGuard, and the host with your kid PC's address):
 
@@ -110,7 +214,7 @@ rest_command:
 
 Example script call: `action: rest_command.ytguard_kidpc_bonus` with `data: {kid: Alice, minutes: 15}`.
 
-## 4. Automations
+### 4. Automations
 
 Replace `notify.mobile_app_your_phone` with your phone's notify service.
 
@@ -197,7 +301,7 @@ automation:
               scope: "{{ 'channel' if verb == 'CHANNEL' else 'video' }}"
 ```
 
-## 5. Opening the full YTGuard UI from Home Assistant
+## Opening the full YTGuard UI from Home Assistant
 
 **Recommended:** a dashboard button that opens the UI in the browser. Your phone's browser keeps the
 "remember this device" login.

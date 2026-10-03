@@ -231,12 +231,24 @@ type Settings struct {
 	UpdateCheck    bool   `json:"updateCheck"`    // check GitHub for new releases
 	AppScan        bool   `json:"appScan"`        // look for other browsers / video apps
 	ListCatalogURL string `json:"listCatalogURL"` // "" = this build's default catalog
+
+	// Home Assistant over MQTT.
+	MQTTEnabled   bool   `json:"mqttEnabled"`
+	MQTTHost      string `json:"mqttHost"`
+	MQTTPort      int    `json:"mqttPort"`
+	MQTTTLS       bool   `json:"mqttTLS"`
+	MQTTInsecure  bool   `json:"mqttInsecure"` // accept a self-signed broker certificate
+	MQTTUser      string `json:"mqttUser"`
+	MQTTPass      string `json:"mqttPass"`
+	MQTTBase      string `json:"mqttBase"`      // topic prefix, default "ytguard"
+	MQTTDiscovery string `json:"mqttDiscovery"` // HA discovery prefix, default "homeassistant"
 }
 
 // DefaultSettings for a fresh install.
 func DefaultSettings() Settings {
 	host, _ := os.Hostname()
-	return Settings{ReportTime: "20:30", SMTPPort: 587, SMTPTLS: "starttls", UnmappedPolicy: "allow", SessionDays: 90, PCName: host, HAEvents: true, UpdateCheck: true, AppScan: true}
+	return Settings{ReportTime: "20:30", SMTPPort: 587, SMTPTLS: "starttls", UnmappedPolicy: "allow", SessionDays: 90, PCName: host, HAEvents: true, UpdateCheck: true, AppScan: true,
+		MQTTPort: 1883, MQTTBase: "ytguard", MQTTDiscovery: "homeassistant"}
 }
 
 // Settings returns the global settings.

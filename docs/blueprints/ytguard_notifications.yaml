@@ -1,0 +1,125 @@
+blueprint:
+  name: YTGuard — phone notifications and approvals
+  description: >
+    Notifies your phone when a kid asks to watch a blocked YouTube video, with
+    Allow video / Allow channel / Deny buttons that answer the right PC.
+    Optionally also notifies about time up, other browsers found, updates and
+    daily reports. Works for every YTGuard PC connected over MQTT.
+  domain: automation
+  source_url: https://github.com/Kruszcontrol/ytguard/blob/main/docs/blueprints/ytguard_notifications.yaml
+  input:
+    phone:
+      name: Phone
+      description: The phone (Home Assistant app) to notify.
+      selector:
+        device:
+          filter:
+            integration: mobile_app
+    event_topic:
+      name: Event topic
+      description: Change only if you changed the topic prefix in YTGuard.
+      default: ytguard/+/event
+    notify_time_up:
+      name: Notify when a kid's time is up
+      default: false
+      selector:
+        boolean:
+    notify_other_apps:
+      name: Notify when another browser or video app is found
+      default: true
+      selector:
+        boolean:
+    notify_updates:
+      name: Notify when a YTGuard update is available
+      default: true
+      selector:
+        boolean:
+    notify_reports:
+      name: Notify with the daily report summary
+      default: false
+      selector:
+        boolean:
+
+mode: queued
+max: 20
+
+variables:
+  notify_time_up: !input notify_time_up
+  notify_other_apps: !input notify_other_apps
+  notify_updates: !input notify_updates
+  notify_reports: !input notify_reports
+
+triggers:
+  - trigger: mqtt
+    topic: !input event_topic
+    id: event
+  - trigger: event
+    event_type: mobile_app_notification_action
+    id: answer
+
+actions:
+  - choose:
+      - alias: Approval request → actionable notification
+        conditions:
+          - condition: trigger
+            id: event
+          - "{{ trigger.payload_json.event_type == 'approval_request' }}"
+        sequence:
+          - variables:
+              e: "{{ trigger.payload_json }}"
+          - device_id: !input phone
+            domain: mobile_app
+            type: notify
+            title: "{{ e.kid }} asks to watch"
+            message: >-
+              {{ e.title }} ({{ e.channel }}){% if e.message %} — “{{ e.message }}”{% endif %} · {{ e.pc }}
+            data:
+              url: "{{ e.url }}"
+              tag: "ytguard-{{ e.pc_id }}-{{ e.request_id }}"
+              actions:
+                - action: "YTG|{{ e.approve_topic }}|approve_video"
+                  title: Allow video
+                - action: "YTG|{{ e.approve_topic }}|approve_channel"
+                  title: Allow channel
+                - action: "YTG|{{ e.approve_topic }}|deny"
+                  title: Deny
+
+      - alias: Button pressed → answer the right PC
+        conditions:
+          - condition: trigger
+            id: answer
+          - >-
+            {{ trigger.event.data.action is match('^YTG\|[^|+#]+/request/[0-9]+/set\|(approve_video|approve_channel|deny)$') }}
+        sequence:
+          - action: mqtt.publish
+            data:
+              topic: "{{ trigger.event.data.action.split('|')[1] }}"
+              payload: "{{ trigger.event.data.action.split('|')[2] }}"
+
+      - alias: Other notifications
+        conditions:
+          - condition: trigger
+            id: event
+          - >-
+            {% set t = trigger.payload_json.event_type %}
+            {{ (t == 'time_up' and notify_time_up) or (t == 'unapproved_app' and notify_other_apps)
+               or (t == 'update_available' and notify_updates) or (t == 'daily_report' and notify_reports)
+               or t == 'test' }}
+        sequence:
+          - variables:
+              e: "{{ trigger.payload_json }}"
+          - device_id: !input phone
+            domain: mobile_app
+            type: notify
+            title: >-
+              {% if e.event_type == 'time_up' %}{{ e.kid }}'s YouTube time is up
+              {% elif e.event_type == 'unapproved_app' %}Other browser found on {{ e.pc }}
+              {% elif e.event_type == 'update_available' %}YTGuard {{ e.latest }} available
+              {% elif e.event_type == 'daily_report' %}YouTube today: {{ e.kid }}
+              {% else %}YTGuard {{ e.pc }}{% endif %}
+            message: >-
+              {% if e.event_type == 'time_up' %}Used {{ e.used_minutes }} min on {{ e.pc }}.
+              {% elif e.event_type == 'unapproved_app' %}{{ e.message }}
+              {% elif e.event_type == 'update_available' %}{{ e.pc }} has {{ e.current }}. To update, run on that PC: sudo ytguard upgrade
+              {% elif e.event_type == 'daily_report' %}{{ e.summary }}
+              {% else %}{{ e.summary }}{% endif %}

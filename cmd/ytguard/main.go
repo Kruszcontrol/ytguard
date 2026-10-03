@@ -24,6 +24,7 @@ import (
 	"ytguard/internal/crx"
 	"ytguard/internal/extapi"
 	"ytguard/internal/filterlist"
+	"ytguard/internal/hamqtt"
 	"ytguard/internal/install"
 	"ytguard/internal/report"
 	"ytguard/internal/store"
@@ -169,7 +170,7 @@ func cmdReport(args []string) error {
 	}
 	if *send {
 		s, _ := st.Settings()
-		if err := report.Send(context.Background(), s, r); err != nil {
+		if err := report.Send(context.Background(), s, r, nil); err != nil {
 			return err
 		}
 		fmt.Println("sent")
@@ -269,6 +270,9 @@ func serve(args []string) error {
 		return err
 	}
 	ui.TrustProxy = *trustProxy
+	bridge := hamqtt.New(app, ext.ExtensionID()[:12])
+	app.MQTT = bridge.Publish
+	ui.MQTTStatus, ui.OnChange, ui.PCID = bridge.Status, bridge.Kick, bridge.PCID
 
 	extSrv := &http.Server{Addr: install.ExtAddr, Handler: ext.Handler(), ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 120 * time.Second}
@@ -303,11 +307,12 @@ func serve(args []string) error {
 			errc <- adminSrv.ListenAndServeTLS("", "")
 		}
 	}()
-	sched := &report.Scheduler{St: st, Now: time.Now}
+	sched := &report.Scheduler{St: st, Now: time.Now, MQTT: bridge.Publish}
 	go sched.Run(ctx)
 	go app.Updates.Run(ctx)
 	go app.RunAppMonitor(ctx, "/proc")
 	go app.RunListUpdater(ctx)
+	go bridge.Run(ctx)
 	slog.Info("ytguard starting", "version", ytguard.Version, "repo", ytguard.Repo, "schema", store.SchemaVersion())
 	go func() {
 		t := time.NewTicker(6 * time.Hour)

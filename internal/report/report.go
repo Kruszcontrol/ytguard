@@ -213,7 +213,8 @@ func (r Report) HTML() (string, error) {
 
 // Send delivers a report through every enabled channel. It returns nil if
 // at least one channel succeeded (or none are enabled).
-func Send(ctx context.Context, s store.Settings, r Report) error {
+// mqtt, if not nil, also delivers the report to Home Assistant over MQTT.
+func Send(ctx context.Context, s store.Settings, r Report, mqtt func(kind string, payload map[string]any) error) error {
 	var errs []string
 	sent := 0
 	if s.ReportEmail {
@@ -227,11 +228,19 @@ func Send(ctx context.Context, s store.Settings, r Report) error {
 			sent++
 		}
 	}
+	payload := map[string]any{"type": "daily_report", "pc": s.PCName, "kid": r.Kid, "date": r.Date,
+		"summary": fmt.Sprintf("%s watched %d min (%d videos) on %s", r.Kid, r.TotalMin, len(r.Videos), r.Date),
+		"text":    r.Text(), "report": r}
 	if s.ReportHA && s.HAWebhookURL != "" {
-		payload := map[string]any{"type": "daily_report", "summary": fmt.Sprintf("%s watched %d min (%d videos) on %s", r.Kid, r.TotalMin, len(r.Videos), r.Date),
-			"text": r.Text(), "report": r}
 		if err := notify.HA(ctx, s.HAWebhookURL, s.HAInsecureTLS, payload); err != nil {
-			errs = append(errs, "home assistant: "+err.Error())
+			errs = append(errs, "home assistant webhook: "+err.Error())
+		} else {
+			sent++
+		}
+	}
+	if s.ReportHA && s.MQTTEnabled && mqtt != nil {
+		if err := mqtt("daily_report", payload); err != nil {
+			errs = append(errs, "MQTT: "+err.Error())
 		} else {
 			sent++
 		}
@@ -248,8 +257,9 @@ func Send(ctx context.Context, s store.Settings, r Report) error {
 // Scheduler sends each kid's report once a day at the configured time,
 // catching up on yesterday's report if the PC was off at report time.
 type Scheduler struct {
-	St  *store.Store
-	Now func() time.Time
+	St   *store.Store
+	Now  func() time.Time
+	MQTT func(kind string, payload map[string]any) error
 
 	failed map[string]time.Time // kid/day -> last failed attempt
 }
@@ -296,7 +306,7 @@ func (sc *Scheduler) tick(ctx context.Context) {
 			}
 			r, err := Build(sc.St, k, day)
 			if err == nil {
-				err = Send(ctx, s, r)
+				err = Send(ctx, s, r, sc.MQTT)
 			}
 			if err != nil {
 				slog.Error("send report (retrying in 30 min)", "kid", k.Name, "day", day, "err", err)

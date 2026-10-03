@@ -26,6 +26,8 @@ type App struct {
 	YT      *ytmeta.Client
 	Updates *update.Checker
 	Now     func() time.Time
+	// MQTT publishes an event to Home Assistant over MQTT (nil = off).
+	MQTT func(kind string, payload map[string]any) error
 
 	mu         sync.Mutex // serializes time accounting
 	timeUpSent map[int64]string
@@ -356,21 +358,33 @@ func (a *App) Deny(id int64) (store.Request, error) {
 }
 
 // Event sends an instant Home Assistant event if enabled. Runs async.
+// The event goes to the Home Assistant webhook and/or MQTT, whichever are
+// configured.
 func (a *App) Event(kind string, data map[string]any) {
 	s, err := a.St.Settings()
-	if err != nil || !s.HAEvents || s.HAWebhookURL == "" {
+	if err != nil || !s.HAEvents {
 		return
 	}
 	payload := map[string]any{"type": kind, "pc": s.PCName, "time": a.Now().Format(time.RFC3339)}
 	for k, v := range data {
 		payload[k] = v
 	}
-	go func() {
-		if err := notify.HA(context.Background(), s.HAWebhookURL, s.HAInsecureTLS, payload); err != nil {
-			slog.Warn("home assistant event", "type", kind, "err", err)
+	if s.HAWebhookURL != "" {
+		go func() {
+			if err := notify.HA(context.Background(), s.HAWebhookURL, s.HAInsecureTLS, payload); err != nil {
+				slog.Warn("home assistant event", "type", kind, "err", err)
+			}
+		}()
+	}
+	if a.MQTT != nil {
+		if err := a.MQTT(kind, payload); err != nil && !errors.Is(err, ErrMQTTOff) {
+			slog.Warn("mqtt event", "type", kind, "err", err)
 		}
-	}()
+	}
 }
+
+// ErrMQTTOff is returned by the MQTT publisher when MQTT isn't connected.
+var ErrMQTTOff = errors.New("MQTT not connected")
 
 // KidState summarizes a kid for the dashboard and REST API.
 type KidState struct {

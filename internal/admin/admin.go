@@ -44,6 +44,13 @@ type Server struct {
 	// TrustProxy makes X-Forwarded-For count as the client IP (only when
 	// the admin listener is on loopback behind a reverse proxy).
 	TrustProxy bool
+	// MQTTStatus describes the Home Assistant MQTT connection (optional).
+	MQTTStatus func() string
+	// OnChange is called after a parent action changes kid state, so
+	// Home Assistant gets the new state right away (optional).
+	OnChange func()
+	// PCID identifies this PC to Home Assistant.
+	PCID string
 
 	pages map[string]*template.Template
 }

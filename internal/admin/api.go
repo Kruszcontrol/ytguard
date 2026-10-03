@@ -162,7 +162,7 @@ func (s *Server) apiState(w http.ResponseWriter, r *http.Request, _ store.APITok
 		return
 	}
 	st, _ := s.App.St.Settings()
-	out := map[string]any{"pc": st.PCName, "kids": []apiKid{}}
+	out := map[string]any{"pc": st.PCName, "pc_id": s.PCID, "kids": []apiKid{}}
 	var kids []apiKid
 	pending := 0
 	for _, ks := range states {
@@ -245,6 +245,7 @@ func (s *Server) apiKidAction(w http.ResponseWriter, r *http.Request, t store.AP
 		return
 	}
 	s.App.St.Audit("api:"+t.Name, s.clientIP(r), "kid "+action, k.Name+" "+b["minutes"])
+	s.changed()
 	st, _ := s.App.Status(k.ID)
 	apiJSON(w, map[string]any{"ok": true, "kid": k.Name, "status": st})
 }
@@ -274,6 +275,7 @@ func (s *Server) apiRequestAction(w http.ResponseWriter, r *http.Request, t stor
 		return
 	}
 	s.App.St.Audit("api:"+t.Name, s.clientIP(r), "request "+r.PathValue("action"), rq.Title)
+	s.changed()
 	rq, _ = s.App.St.Request(id)
 	apiJSON(w, map[string]any{"ok": true, "request": rq})
 }

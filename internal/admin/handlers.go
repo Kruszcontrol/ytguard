@@ -91,6 +91,7 @@ func (s *Server) kidAction(w http.ResponseWriter, r *req) {
 	}
 	if err == nil {
 		s.App.St.Audit("admin", r.IP, "kid "+action, k.Name+" "+r.FormValue("minutes"))
+		s.changed()
 	}
 	back(w, r, "/", msg, err)
 }
@@ -115,6 +116,7 @@ func (s *Server) requestDecide(w http.ResponseWriter, r *req) {
 	}
 	if err == nil {
 		s.App.St.Audit("admin", r.IP, "request", msg)
+		s.changed()
 	}
 	back(w, r, "/", msg, err)
 }
@@ -641,10 +643,10 @@ func (s *Server) reportSend(w http.ResponseWriter, r *req) {
 		rep, err = report.Build(s.App.St, k, day)
 		if err == nil {
 			st, _ := s.App.St.Settings()
-			if !st.ReportEmail && !(st.ReportHA && st.HAWebhookURL != "") {
+			if !st.ReportEmail && !(st.ReportHA && (st.HAWebhookURL != "" || st.MQTTEnabled)) {
 				err = errors.New("no report delivery turned on in Settings")
 			} else {
-				err = report.Send(r.Context(), st, rep)
+				err = report.Send(r.Context(), st, rep, s.App.MQTT)
 			}
 		}
 	}
@@ -655,7 +657,12 @@ func (s *Server) reportSend(w http.ResponseWriter, r *req) {
 
 func (s *Server) settingsPage(w http.ResponseWriter, r *req) {
 	st, _ := s.App.St.Settings()
-	s.page(w, r, "settings", map[string]any{"S": st, "Host": r.Host, "DefaultCatalog": core.DefaultCatalogURL()})
+	mqttStatus := "off"
+	if s.MQTTStatus != nil {
+		mqttStatus = s.MQTTStatus()
+	}
+	s.page(w, r, "settings", map[string]any{"S": st, "Host": r.Host, "DefaultCatalog": core.DefaultCatalogURL(),
+		"MQTTStatus": mqttStatus, "PCID": s.PCID})
 }
 
 func (s *Server) settingsSave(w http.ResponseWriter, r *req) {
@@ -711,6 +718,32 @@ func (s *Server) settingsSave(w http.ResponseWriter, r *req) {
 	st.EmbedOrigins = strings.Join(origins, " ")
 	st.SessionDays = min(max(formInt(r, "session_days", 90), 1), 400)
 	st.UpdateCheck = r.FormValue("update_check") == "on"
+	st.MQTTEnabled = r.FormValue("mqtt_enabled") == "on"
+	st.MQTTHost = strings.TrimSpace(r.FormValue("mqtt_host"))
+	st.MQTTPort = formInt(r, "mqtt_port", 1883)
+	st.MQTTTLS = r.FormValue("mqtt_tls") == "on"
+	st.MQTTInsecure = r.FormValue("mqtt_insecure") == "on"
+	st.MQTTUser = strings.TrimSpace(r.FormValue("mqtt_user"))
+	if p := r.FormValue("mqtt_pass"); p != "" {
+		st.MQTTPass = p
+	}
+	if r.FormValue("mqtt_pass_clear") == "on" {
+		st.MQTTPass = ""
+	}
+	for name, v := range map[string]*string{"mqtt_base": &st.MQTTBase, "mqtt_discovery": &st.MQTTDiscovery} {
+		t := strings.Trim(strings.TrimSpace(r.FormValue(name)), "/")
+		if t != "" && (strings.ContainsAny(t, "+#") || strings.Contains(t, "//")) {
+			back(w, r, "/settings", "", fmt.Errorf("MQTT topic %q can't contain + or #", t))
+			return
+		}
+		if t != "" {
+			*v = t
+		}
+	}
+	if st.MQTTEnabled && st.MQTTHost == "" {
+		back(w, r, "/settings", "", errors.New("enter the MQTT broker's address (e.g. homeassistant.local)"))
+		return
+	}
 	st.AppScan = r.FormValue("app_scan") == "on"
 	if c := strings.TrimSpace(r.FormValue("catalog_url")); c == "" || c == core.DefaultCatalogURL() {
 		st.ListCatalogURL = ""
@@ -725,6 +758,7 @@ func (s *Server) settingsSave(w http.ResponseWriter, r *req) {
 		return
 	}
 	s.App.St.Audit("admin", r.IP, "settings saved", "")
+	s.changed() // e.g. connect to MQTT right away
 	back(w, r, "/settings", "Settings saved.", nil)
 }
 
@@ -736,8 +770,36 @@ func (s *Server) testEmail(w http.ResponseWriter, r *req) {
 
 func (s *Server) testHA(w http.ResponseWriter, r *req) {
 	st, _ := s.App.St.Settings()
-	err := notify.HA(r.Context(), st.HAWebhookURL, st.HAInsecureTLS, map[string]any{"type": "test", "pc": st.PCName, "summary": "YTGuard test from " + st.PCName})
-	back(w, r, "/settings", "Test event sent to Home Assistant.", err)
+	payload := map[string]any{"type": "test", "pc": st.PCName, "summary": "YTGuard test from " + st.PCName}
+	var sent []string
+	var errs []string
+	if st.HAWebhookURL != "" {
+		if err := notify.HA(r.Context(), st.HAWebhookURL, st.HAInsecureTLS, payload); err != nil {
+			errs = append(errs, "webhook: "+err.Error())
+		} else {
+			sent = append(sent, "webhook")
+		}
+	}
+	if st.MQTTEnabled && s.App.MQTT != nil {
+		if err := s.App.MQTT("test", payload); err != nil {
+			errs = append(errs, "MQTT: "+err.Error())
+		} else {
+			sent = append(sent, "MQTT")
+		}
+	}
+	var err error
+	if len(errs) > 0 {
+		err = errors.New(strings.Join(errs, "; "))
+	} else if len(sent) == 0 {
+		err = errors.New("set up MQTT or a webhook URL first (and save)")
+	}
+	back(w, r, "/settings", "Test event sent to Home Assistant ("+strings.Join(sent, " and ")+").", err)
+}
+
+func (s *Server) changed() {
+	if s.OnChange != nil {
+		s.OnChange()
+	}
 }
 
 func (s *Server) checkUpdate(w http.ResponseWriter, r *req) {
