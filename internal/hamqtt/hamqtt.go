@@ -183,7 +183,8 @@ func (b *Bridge) session(ctx context.Context, s store.Settings) error {
 	}()
 	slog.Info("mqtt connected", "broker", opts.Addr, "base", base)
 
-	if err := c.Subscribe(base+"/kid/+/cmd", base+"/kid/+/pause/set", base+"/request/+/set", s.MQTTDiscovery+"/status"); err != nil {
+	if err := c.Subscribe(base+"/kid/+/cmd", base+"/kid/+/pause/set", base+"/kid/+/limits/set", base+"/kid/+/breaks/set",
+		base+"/request/+/set", s.MQTTDiscovery+"/status"); err != nil {
 		c.Close()
 		return err
 	}
@@ -248,6 +249,8 @@ type kidState struct {
 	VideoURL         string `json:"video_url"`
 	TodayVideos      int    `json:"today_videos"`
 	PendingRequests  int    `json:"pending_requests"`
+	TimeLimits       bool   `json:"time_limits"` // enforcement switches
+	Breaks           bool   `json:"breaks"`
 }
 
 func minutes(sec int) *int {
@@ -268,7 +271,8 @@ func (b *Bridge) publishState(c *mqtt.Client, base string) error {
 		st := ks.Status
 		k := kidState{UsedMinutes: st.UsedSec / 60, RemainingMinutes: minutes(st.RemainingSec), LimitMinutes: minutes(st.LimitSec),
 			BreakInMinutes: minutes(st.BreakInSec), Allowed: st.Allowed, Locked: st.Reason == "locked", Message: st.Message,
-			TodayVideos: ks.TodayVideos, PendingRequests: ks.Pending, Watching: ks.WatchingNow && st.Allowed}
+			TodayVideos: ks.TodayVideos, PendingRequests: ks.Pending, Watching: ks.WatchingNow && st.Allowed,
+			TimeLimits: !ks.Kid.Options.TimeLimitsOff, Breaks: !ks.Kid.Options.BreaksOff}
 		switch {
 		case st.Reason != "":
 			k.State = st.Reason
@@ -337,6 +341,8 @@ func (b *Bridge) handle(base, disc string, m mqtt.Message) {
 			cmd = "lock:0"
 		}
 		what, err = b.kidCommand(parts[1], cmd)
+	case len(parts) == 4 && parts[0] == "kid" && (parts[2] == "limits" || parts[2] == "breaks") && parts[3] == "set":
+		what, err = b.kidSwitch(parts[1], parts[2], strings.EqualFold(payload, "ON"))
 	case len(parts) == 3 && parts[0] == "request" && parts[2] == "set":
 		what, err = b.requestCommand(parts[1], payload)
 	default:
@@ -378,6 +384,24 @@ func (b *Bridge) kidCommand(idStr, cmd string) (string, error) {
 		return "kid end break " + k.Name, b.App.Unlock(id, true)
 	}
 	return "", fmt.Errorf("unknown command %q", cmd)
+}
+
+// kidSwitch turns a kid's time limits or breaks enforcement on or off.
+func (b *Bridge) kidSwitch(idStr, which string, on bool) (string, error) {
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		return "", errors.New("bad kid id")
+	}
+	k, err := b.App.St.Kid(id)
+	if err != nil {
+		return "", err
+	}
+	if which == "limits" {
+		k.Options.TimeLimitsOff = !on
+	} else {
+		k.Options.BreaksOff = !on
+	}
+	return fmt.Sprintf("kid %s %s on=%v", which, k.Name, on), b.App.St.SaveKid(&k)
 }
 
 func (b *Bridge) requestCommand(idStr, cmd string) (string, error) {

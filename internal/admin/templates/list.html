@@ -7,6 +7,7 @@
   <p class="small muted">{{$l.RuleCount}} entries{{if $l.AllowCount}} ({{$l.AllowCount}} allow){{end}} · for {{$l.AppliesTo}} ·
     updated {{datetime $l.FetchedAt}}{{if $l.Version}} · version {{$l.Version}}{{end}}{{if $l.License}} · license {{$l.License}}{{end}}<br>
     Source: <a href="{{$l.URL}}" target="_blank" rel="noopener">{{$l.URL}}</a>{{if $l.Homepage}} · <a href="{{$l.Homepage}}" target="_blank" rel="noopener">homepage</a>{{end}}</p>
+  <p class="small"><b>This list {{if eq $l.Mode "hide"}}hides{{else if eq $l.Mode "mixed"}}hides or blocks (as marked below){{else}}blocks{{end}}</b> what it denies — change that on the Lists page.</p>
   <p class="small muted">List entries can't be edited here. To override one, add your own entry of the same type in Filters (yours wins).</p>
   {{with $l.Warnings}}<details><summary class="small">{{len .}} lines skipped</summary><ul class="small">{{range .}}<li>{{.}}</li>{{end}}</ul></details>{{end}}
 </div>

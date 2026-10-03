@@ -21,6 +21,7 @@ type FilterList struct {
 	Version      string   `json:"version"`
 	Kids         []int64  `json:"kids"` // empty = all kids
 	Enabled      bool     `json:"enabled"`
+	Mode         string   `json:"mode"` // block | hide | mixed: what the list's Deny entries do
 	ETag         string   `json:"-"`
 	LastModified string   `json:"-"`
 	FetchedAt    int64    `json:"fetchedAt"` // last time the content was downloaded
@@ -46,13 +47,29 @@ func (l FilterList) AppliesTo(kidID int64) bool {
 }
 
 const listCols = `id, url, title, description, ages, homepage, license, version, kids, enabled, etag, last_modified,
-	fetched_at, checked_at, error, rule_count, allow_count, warnings, added_at`
+	fetched_at, checked_at, error, rule_count, allow_count, warnings, added_at, mode`
+
+// List modes.
+const (
+	ListModeBlock = "block" // shown with a lock; the kid can ask (default)
+	ListModeHide  = "hide"  // never shown
+	ListModeMixed = "mixed" // as the list's author marked each entry
+)
+
+// ValidListMode returns m if valid, else the default.
+func ValidListMode(m string) string {
+	switch m {
+	case ListModeHide, ListModeMixed:
+		return m
+	}
+	return ListModeBlock
+}
 
 func scanList(row interface{ Scan(...any) error }) (FilterList, error) {
 	var l FilterList
 	var kids, warnings string
 	err := row.Scan(&l.ID, &l.URL, &l.Title, &l.Description, &l.Ages, &l.Homepage, &l.License, &l.Version, &kids, &l.Enabled,
-		&l.ETag, &l.LastModified, &l.FetchedAt, &l.CheckedAt, &l.Error, &l.RuleCount, &l.AllowCount, &warnings, &l.AddedAt)
+		&l.ETag, &l.LastModified, &l.FetchedAt, &l.CheckedAt, &l.Error, &l.RuleCount, &l.AllowCount, &warnings, &l.AddedAt, &l.Mode)
 	if errors.Is(err, sql.ErrNoRows) {
 		return l, ErrNotFound
 	}
@@ -111,9 +128,9 @@ func (s *Store) ListByURL(url string) (FilterList, error) {
 
 // AddList subscribes to a URL (no rules until it's fetched).
 func (s *Store) AddList(l *FilterList) error {
-	l.AddedAt = now()
-	res, err := s.DB.Exec(`INSERT INTO lists(url, title, kids, enabled, added_at) VALUES(?,?,?,?,?)`,
-		l.URL, l.Title, joinIDs(l.Kids), l.Enabled, l.AddedAt)
+	l.AddedAt, l.Mode = now(), ValidListMode(l.Mode)
+	res, err := s.DB.Exec(`INSERT INTO lists(url, title, kids, enabled, added_at, mode) VALUES(?,?,?,?,?,?)`,
+		l.URL, l.Title, joinIDs(l.Kids), l.Enabled, l.AddedAt, l.Mode)
 	if err != nil {
 		return err
 	}
@@ -121,9 +138,14 @@ func (s *Store) AddList(l *FilterList) error {
 	return nil
 }
 
-// SetListOptions changes which kids a list applies to and whether it's on.
-func (s *Store) SetListOptions(id int64, kids []int64, enabled bool) error {
-	_, err := s.DB.Exec(`UPDATE lists SET kids=?, enabled=? WHERE id=?`, joinIDs(kids), enabled, id)
+// SetListOptions changes which kids a list applies to, whether it's on,
+// and (if mode isn't empty) what its Deny entries do.
+func (s *Store) SetListOptions(id int64, kids []int64, enabled bool, mode string) error {
+	if mode == "" {
+		_, err := s.DB.Exec(`UPDATE lists SET kids=?, enabled=? WHERE id=?`, joinIDs(kids), enabled, id)
+		return err
+	}
+	_, err := s.DB.Exec(`UPDATE lists SET kids=?, enabled=?, mode=? WHERE id=?`, joinIDs(kids), enabled, ValidListMode(mode), id)
 	return err
 }
 
@@ -203,7 +225,7 @@ func (s *Store) removeKidFromLists(kidID int64) error {
 				keep = append(keep, k)
 			}
 		}
-		if err := s.SetListOptions(l.ID, keep, l.Enabled && len(keep) > 0); err != nil {
+		if err := s.SetListOptions(l.ID, keep, l.Enabled && len(keep) > 0, ""); err != nil {
 			return err
 		}
 	}

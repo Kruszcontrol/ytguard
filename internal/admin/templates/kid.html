@@ -36,6 +36,11 @@
 </div>
 <div class="card">
   <h2>Time</h2>
+  <div class="row wrap">
+    <label class="check"><input type="checkbox" name="time_limits" {{if not $k.Options.TimeLimitsOff}}checked{{end}}> <b>Time limits</b> <small class="muted">(daily minutes and allowed hours below)</small></label>
+    <label class="check"><input type="checkbox" name="breaks" {{if not $k.Options.BreaksOff}}checked{{end}}> <b>Breaks</b> <small class="muted">(break settings below)</small></label>
+  </div>
+  <p class="muted small">Unticked switches keep the settings below but don't enforce them. Watch time is still recorded for History and reports.</p>
   <p class="muted small">Daily minutes: blank = unlimited, 0 = none. Hours: e.g. <code>07:00-08:00, 15:30-20:00</code>, blank = any time.
   Breaks: after N minutes of watching, YouTube pauses for M minutes (a pause of M minutes on their own also counts as a break).</p>
   <div class="scroll">

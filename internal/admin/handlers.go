@@ -186,6 +186,8 @@ func (s *Server) kidSave(w http.ResponseWriter, r *req) {
 	k.HideDefault = pickList(r.FormValue("hide_default"))
 	k.BlockDefault = pickList(r.FormValue("block_default"))
 	k.Options = store.KidOptions{
+		TimeLimitsOff:   r.FormValue("time_limits") != "on",
+		BreaksOff:       r.FormValue("breaks") != "on",
 		HideComments:    r.FormValue("hide_comments") == "on",
 		Shorts:          r.FormValue("shorts"),
 		DisableAutoplay: r.FormValue("disable_autoplay") == "on",

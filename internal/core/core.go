@@ -157,7 +157,7 @@ func (a *App) Enrich(ctx context.Context, items []rules.Meta) {
 
 // schedule returns a kid's schedule for t's weekday.
 func (a *App) schedule(kidID int64, t time.Time) timekeeper.Schedule {
-	sch, err := a.St.Schedule(kidID, int(t.Weekday()))
+	sch, err := a.St.EffectiveSchedule(kidID, int(t.Weekday()))
 	if err != nil {
 		slog.Error("load schedule", "err", err)
 		return timekeeper.Schedule{DailyMinutes: 0}

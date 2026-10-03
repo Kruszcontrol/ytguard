@@ -10,6 +10,8 @@
 <details class="card help">
   <summary>How shared lists work</summary>
   <p>Filter lists are maintained by others (like ad-block lists) and update automatically once a day. Pick the ones that fit each kid's age.</p>
+  <p>For each list choose what it does: <b>Block</b> (default) shows matching videos with a lock so the kid can ask you;
+    <b>Hide</b> removes them completely; <b>Mixed</b> follows the list author's choice for each entry (some hidden, some blocked).</p>
   <p><b>Your own entries always win</b> over a list's entry of the same type. For example, if a list hides the keyword “fortnite”, adding
     “fortnite” to your own Hide&nbsp;→&nbsp;Allow keywords shows those videos again. The usual order still applies (video → channel → keyword → category → attribute),
     so to override a list's channel entry, add that channel (or video) yourself. The Rule tester shows which list decided.</p>
@@ -28,7 +30,7 @@
         {{if not .Enabled}}<span class="pill muted">off</span>{{end}}
         <div class="muted small">{{.Description}}</div>
         <div class="small">{{.RuleCount}} entries{{if .AllowCount}} · <b>{{.AllowCount}} allow</b>{{end}}
-          · for {{.AppliesTo}} · updated {{datetime .FetchedAt}}{{if .Version}} · version {{.Version}}{{end}}
+          · <b>{{if eq .Mode "hide"}}hides{{else if eq .Mode "mixed"}}hides or blocks (mixed){{else}}blocks{{end}}</b> for {{.AppliesTo}} · updated {{datetime .FetchedAt}}{{if .Version}} · version {{.Version}}{{end}}
           {{if .Homepage}} · <a href="{{.Homepage}}" target="_blank" rel="noopener">homepage</a>{{end}}</div>
         {{if .Error}}<div class="flash err small">Last update failed: {{.Error}} (still using the previous copy)</div>{{end}}
         {{if .Warnings}}<div class="muted small">{{len .Warnings}} lines in this list were skipped (<a href="/filters/lists/{{.ID}}">details</a>).</div>{{end}}
@@ -41,7 +43,12 @@
     <form method="post" action="/filters/lists/{{.ID}}/options" class="row wrap small">
       <input type="hidden" name="csrf" value="{{$csrf}}">
       <label class="check"><input type="checkbox" name="enabled" {{if .Enabled}}checked{{end}}> On</label>
-      <span>Applies to:</span>
+      <select name="mode" aria-label="What this list does">
+        <option value="block" {{if eq .Mode "block"}}selected{{end}}>Block (kid can ask)</option>
+        <option value="hide" {{if eq .Mode "hide"}}selected{{end}}>Hide (never shown)</option>
+        <option value="mixed" {{if eq .Mode "mixed"}}selected{{end}}>Mixed (as the list marks each entry)</option>
+      </select>
+      <span>for:</span>
       <label class="check"><input type="checkbox" name="kid" value="all" {{if not .Kids}}checked{{end}}> All kids</label>
       {{$l := .}}{{range $kids}}<label class="check"><input type="checkbox" name="kid" value="{{.ID}}" {{if has64 $l.Kids .ID}}checked{{end}}> {{.Name}}</label>{{end}}
       <button class="small">Save</button>
@@ -64,6 +71,11 @@
       {{if .Subscribed}}<span class="pill ok">subscribed</span>{{else}}
       <form method="post" action="/filters/lists/subscribe" class="row wrap small">
         <input type="hidden" name="csrf" value="{{$csrf}}"><input type="hidden" name="url" value="{{.URL}}">
+        <select name="mode" aria-label="What this list does">
+          <option value="block" selected>Block (kid can ask)</option>
+          <option value="hide">Hide (never shown)</option>
+          <option value="mixed">Mixed (as the list marks it)</option>
+        </select>
         <label class="check"><input type="checkbox" name="kid" value="all" checked> All kids</label>
         {{range $kids}}<label class="check"><input type="checkbox" name="kid" value="{{.ID}}"> {{.Name}}</label>{{end}}
         <button class="primary small">Subscribe</button>
@@ -78,6 +90,11 @@
   <form method="post" action="/filters/lists/subscribe" class="row wrap">
     <input type="hidden" name="csrf" value="{{$csrf}}">
     <input name="url" placeholder="https://…/my-list.txt" required class="grow">
+    <select name="mode" aria-label="What this list does">
+          <option value="block" selected>Block (kid can ask)</option>
+          <option value="hide">Hide (never shown)</option>
+          <option value="mixed">Mixed (as the list marks it)</option>
+        </select>
     <label class="check"><input type="checkbox" name="kid" value="all" checked> All kids</label>
     {{range $kids}}<label class="check"><input type="checkbox" name="kid" value="{{.ID}}"> {{.Name}}</label>{{end}}
     <button class="primary">Subscribe</button>

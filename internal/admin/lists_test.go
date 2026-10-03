@@ -95,8 +95,23 @@ func TestFilterLists(t *testing.T) {
 		return d.Outcome
 	}
 	creepy := rules.Meta{VideoID: "v1", Title: "Creepypasta story", Full: true}
+	if l.Mode != store.ListModeBlock {
+		t.Fatalf("default mode %q", l.Mode)
+	}
+	if got := decide(e.kid, creepy); got != rules.Block {
+		t.Fatalf("block mode (default): %s", got)
+	}
+	e.post(fmt.Sprintf("/filters/lists/%d/options", l.ID), url.Values{"csrf": {csrf}, "enabled": {"on"}, "kid": {fmt.Sprint(e.kid.ID)}, "mode": {"hide"}})
 	if got := decide(e.kid, creepy); got != rules.Hide {
-		t.Fatalf("subscribed kid: %s", got)
+		t.Fatalf("hide mode: %s", got)
+	}
+	e.post(fmt.Sprintf("/filters/lists/%d/options", l.ID), url.Values{"csrf": {csrf}, "enabled": {"on"}, "kid": {fmt.Sprint(e.kid.ID)}, "mode": {"mixed"}})
+	if got := decide(e.kid, creepy); got != rules.Hide { // the list marks it [hide deny]
+		t.Fatalf("mixed mode: %s", got)
+	}
+	// The list's Allow entries keep their own tier in every mode.
+	if got := decide(e.kid, rules.Meta{VideoID: "v9", Title: "Lego build", Full: true}); got != rules.Play {
+		t.Fatalf("allow entry: %s", got)
 	}
 	if got := decide(other, creepy); got != rules.Play {
 		t.Fatalf("unsubscribed kid: %s", got)

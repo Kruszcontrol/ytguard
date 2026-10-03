@@ -61,7 +61,8 @@ func (a *App) Catalog(ctx context.Context) (filterlist.Catalog, error) {
 }
 
 // Subscribe adds a list and downloads it. kids empty = all kids.
-func (a *App) Subscribe(ctx context.Context, url string, kids []int64) (store.FilterList, error) {
+// mode is what the list's Deny entries do: block (default), hide or mixed.
+func (a *App) Subscribe(ctx context.Context, url string, kids []int64, mode string) (store.FilterList, error) {
 	url = strings.TrimSpace(url)
 	if err := filterlist.CheckURL(url); err != nil {
 		return store.FilterList{}, err
@@ -69,7 +70,7 @@ func (a *App) Subscribe(ctx context.Context, url string, kids []int64) (store.Fi
 	if _, err := a.St.ListByURL(url); err == nil {
 		return store.FilterList{}, errors.New("already subscribed to that list")
 	}
-	l := store.FilterList{URL: url, Kids: kids, Enabled: true}
+	l := store.FilterList{URL: url, Kids: kids, Enabled: true, Mode: mode}
 	if err := a.St.AddList(&l); err != nil {
 		return l, err
 	}

@@ -131,6 +131,7 @@ Under **Filters → Lists** you can subscribe to lists that other people maintai
 The recommended lists come from [Kruszcontrol/ytguard-lists](https://github.com/Kruszcontrol/ytguard-lists): scary/horror, violence, mature content, dangerous challenges, gambling and scams, and basics for young kids, with suggested ages.
 You can also subscribe to any https:// address.
 
+- **Block or hide:** for each list choose **Block** (the default: matching videos show with a lock and the kid can ask), **Hide** (never shown) or **Mixed** (the list author's choice per entry).
 - **Your own entries win** over a list's entry of the same type. The usual order still applies (video → channel → keyword → category → attribute). So to undo a list's channel entry, add that channel (or a video) yourself; a broad keyword Allow won't unhide a channel a list hides.
 - The Rule tester and History say which list made a decision, and the Tester has one-click **Allow this video / channel** overrides.
 - Lists are checked for updates daily. If a download fails, the previous copy stays in use. Lines a list gets wrong are skipped and shown as warnings.
@@ -166,6 +167,7 @@ A video is known to be a Short once it has appeared anywhere as a Short. Opening
 
 ### Time and breaks
 
+Each kid has two switches: **Time limits** (daily minutes and allowed hours) and **Breaks**. Turn either off to stop enforcing it while keeping its settings; watch time is still recorded. Both are also switches on the kid's Home Assistant device.
 Time counts only while a video is actually playing. Breaks: after *N* minutes of watching, YouTube pauses for *M* minutes with a countdown. Pausing for *M* minutes on their own also counts as a break. Allowed hours and the daily limit both apply; the kid sees a "time left · break in" badge.
 
 ### Other browsers and video apps

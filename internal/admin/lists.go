@@ -67,7 +67,7 @@ func formKids(r *req) []int64 {
 }
 
 func (s *Server) listSubscribe(w http.ResponseWriter, r *req) {
-	l, err := s.App.Subscribe(r.Context(), r.FormValue("url"), formKids(r))
+	l, err := s.App.Subscribe(r.Context(), r.FormValue("url"), formKids(r), r.FormValue("mode"))
 	if err != nil {
 		back(w, r, "/filters/lists", "", fmt.Errorf("couldn't subscribe: %w", err))
 		return
@@ -98,11 +98,11 @@ func (s *Server) listOptions(w http.ResponseWriter, r *req) {
 	}
 	kids := formKids(r)
 	enabled := r.FormValue("enabled") == "on"
-	if err := s.App.St.SetListOptions(l.ID, kids, enabled); err != nil {
+	if err := s.App.St.SetListOptions(l.ID, kids, enabled, store.ValidListMode(r.FormValue("mode"))); err != nil {
 		back(w, r, "/filters/lists", "", err)
 		return
 	}
-	s.App.St.Audit("admin", r.IP, "list options", fmt.Sprintf("%s enabled=%v kids=%v", l.Title, enabled, kids))
+	s.App.St.Audit("admin", r.IP, "list options", fmt.Sprintf("%s enabled=%v kids=%v mode=%s", l.Title, enabled, kids, r.FormValue("mode")))
 	back(w, r, "/filters/lists", "Saved “"+l.Title+"”.", nil)
 }
 

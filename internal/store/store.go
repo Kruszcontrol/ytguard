@@ -143,6 +143,11 @@ var migrations = []func(tx *sql.Tx) error{
 		}
 		return nil
 	},
+	// 4: per-subscription behaviour (block / hide / mixed).
+	func(tx *sql.Tx) error {
+		_, err := tx.Exec(`ALTER TABLE lists ADD COLUMN mode TEXT NOT NULL DEFAULT 'block'`)
+		return err
+	},
 }
 
 // SchemaVersion is the schema version this build expects.
@@ -306,6 +311,10 @@ const (
 
 // KidOptions are per-kid YouTube page tweaks.
 type KidOptions struct {
+	// TimeLimitsOff stops enforcing daily minutes and allowed hours;
+	// BreaksOff stops enforcing breaks. Schedules are kept either way.
+	TimeLimitsOff   bool   `json:"timeLimitsOff"`
+	BreaksOff       bool   `json:"breaksOff"`
 	HideComments    bool   `json:"hideComments"`
 	Shorts          string `json:"shorts"`               // filter | block | hide
 	HideShorts      bool   `json:"hideShorts,omitempty"` // legacy; read as Shorts=hide
@@ -443,6 +452,26 @@ func (s *Store) Schedule(kidID int64, weekday int) (timekeeper.Schedule, error) 
 	return sch, nil
 }
 
+// EffectiveSchedule is the schedule that's enforced for a weekday, after
+// the kid's "time limits" and "breaks" switches.
+func (s *Store) EffectiveSchedule(kidID int64, weekday int) (timekeeper.Schedule, error) {
+	sch, err := s.Schedule(kidID, weekday)
+	if err != nil {
+		return sch, err
+	}
+	k, err := s.Kid(kidID)
+	if err != nil {
+		return sch, err
+	}
+	if k.Options.TimeLimitsOff {
+		sch.DailyMinutes, sch.Windows = -1, nil
+	}
+	if k.Options.BreaksOff {
+		sch.BreakAfter, sch.BreakLen = 0, 0
+	}
+	return sch, nil
+}
+
 // Schedules returns all seven weekdays.
 func (s *Store) Schedules(kidID int64) ([7]timekeeper.Schedule, error) {
 	var out [7]timekeeper.Schedule
@@ -505,7 +534,10 @@ func (s *Store) BonusMinutes(kidID int64, day string) (int, error) {
 
 // ruleCols/ruleFrom select rules with the name of the list they came from.
 const (
-	ruleCols = `r.id, r.tier, r.list, r.type, r.value, r.extra, r.fields, r.match, r.kid_id, r.label, r.note, r.list_id, coalesce(l.title, '')`
+	// A list's Deny entries take the tier the parent chose for the list
+	// (block or hide); "mixed" keeps what the list's author wrote.
+	ruleCols = `r.id, CASE WHEN r.list_id > 0 AND r.list = 'deny' AND l.mode IN ('block', 'hide') THEN l.mode ELSE r.tier END,
+		r.list, r.type, r.value, r.extra, r.fields, r.match, r.kid_id, r.label, r.note, r.list_id, coalesce(l.title, '')`
 	ruleFrom = ` FROM rules r LEFT JOIN lists l ON l.id = r.list_id`
 )
 

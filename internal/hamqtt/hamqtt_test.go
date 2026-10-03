@@ -25,7 +25,7 @@ func TestEntitiesUniquePerPC(t *testing.T) {
 	b, _ := newBridge(t, "pcbbbbbbbbbb")
 	ea, _ := a.entities("ytguard/pcaaaaaaaaaa")
 	eb, _ := b.entities("ytguard/pcbbbbbbbbbb")
-	if len(ea) != 4+11 {
+	if len(ea) != 4+13 {
 		t.Fatalf("entities: %d", len(ea))
 	}
 	ids := map[string]bool{}
@@ -73,6 +73,19 @@ func TestKidsChangedAndCommands(t *testing.T) {
 	st, _ := b.App.Status(k.ID)
 	if st.Reason == "locked" || st.LimitSec != st0.LimitSec+15*60 {
 		t.Fatalf("after commands: %+v (before %+v)", st, st0)
+	}
+	// Enforcement switches.
+	send("/kid/1/limits/set", "OFF", false)
+	send("/kid/1/breaks/set", "OFF", false)
+	if kk, _ := b.App.St.Kid(k.ID); !kk.Options.TimeLimitsOff || !kk.Options.BreaksOff {
+		t.Fatalf("switches: %+v", kk.Options)
+	}
+	if st, _ := b.App.Status(k.ID); st.LimitSec != -1 || st.BreakInSec != -1 {
+		t.Fatalf("limits still enforced: %+v", st)
+	}
+	send("/kid/1/limits/set", "ON", false)
+	if kk, _ := b.App.St.Kid(k.ID); kk.Options.TimeLimitsOff {
+		t.Fatal("limits not back on")
 	}
 	// Approval by topic.
 	r := store.Request{KidID: k.ID, VideoID: "abcdefghijk", Title: "T"}

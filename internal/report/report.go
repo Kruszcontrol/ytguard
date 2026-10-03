@@ -68,7 +68,7 @@ func Build(st *store.Store, k store.Kid, day string) (Report, error) {
 	}
 	s, _ := st.Settings()
 	r := Report{PC: s.PCName, Kid: k.Name, Date: day, PublicURL: s.PublicURL, LimitMin: -1}
-	if sch, err := st.Schedule(k.ID, int(t.Weekday())); err == nil && sch.DailyMinutes >= 0 {
+	if sch, err := st.EffectiveSchedule(k.ID, int(t.Weekday())); err == nil && sch.DailyMinutes >= 0 {
 		bonus, _ := st.BonusMinutes(k.ID, day)
 		r.LimitMin = sch.DailyMinutes + bonus
 	}
