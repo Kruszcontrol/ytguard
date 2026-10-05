@@ -1,0 +1,121 @@
+{{define "content"}}
+{{$snap := .D.Snap}}
+<div class="page-head" data-autorefresh="30">
+  <div>
+    <h1>Dashboard</h1>
+    <p>{{len $snap.Kids}} {{if eq (len $snap.Kids) 1}}kid{{else}}kids{{end}} on {{len $snap.PCs}} {{if eq (len $snap.PCs) 1}}PC{{else}}PCs{{end}}{{if $snap.Offline}} · <b>{{$snap.Offline}} not reachable</b>{{end}} · updated {{$snap.At.Format "15:04:05"}}</p>
+  </div>
+  <a class="button ghost" href="/">{{icon "refresh"}} Refresh</a>
+</div>
+
+{{if not $snap.PCs}}
+<section class="card">
+  <div class="empty">{{icon "devices"}} No PCs yet. <a href="/pcs">Add your kids' PCs</a> to see and manage them here.</div>
+</section>
+{{end}}
+
+{{range .D.Problems}}
+<div class="flash {{if .CertChanged}}err{{else}}warn{{end}}">{{icon "alert"}}<div class="grow"><b>{{.Name}}</b>: {{.Err}} <a href="/pcs">Details</a></div></div>
+{{end}}
+{{range .D.Updates}}
+<div class="flash info">{{icon "arrow-up"}}<div class="grow"><b>{{.Name}}</b> can be updated to YTGuard {{.State.YTGuard.Latest}} (has {{.State.YTGuard.Version}}){{with .State.YTGuard.ReleaseURL}} · <a href="{{.}}" target="_blank" rel="noopener">What's new</a>{{end}}. An adult runs <code>sudo ytguard upgrade</code> on it.</div></div>
+{{end}}
+
+{{if $snap.Requests}}
+<section class="card attention">
+  <div class="card-head">
+    <h2>{{icon "bell"}} Waiting for you <span class="count">{{len $snap.Requests}}</span></h2>
+    <p>Your kids asked to watch these. Allowing a video (or its whole channel) lets it play right away on that kid's PC.</p>
+  </div>
+  {{range $snap.Requests}}
+  <div class="request">
+    <div class="req-who">{{icon "user"}} <b>{{.KidName}}</b> wants to watch <span class="pc-tag">{{icon "devices"}} {{.PC.Name}}</span> <span class="muted small">· asked {{datetime .CreatedAt}}</span></div>
+    <a class="video" href="{{watch .VideoID}}" target="_blank" rel="noopener">
+      <img src="{{thumb .VideoID}}" alt="" loading="lazy">
+      <span><b>{{.Title}}</b>
+        <span class="muted small">{{.ChannelName}}</span>
+        {{if .Message}}<br><span class="quote">“{{.Message}}”</span>{{end}}
+        <br><span class="muted small">Blocked by: {{.Reason}}</span></span>
+    </a>
+    <div class="actions">
+      <form method="post" action="/pcs/{{.PC.ID}}/requests/{{.ID}}/approve"><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="scope" value="video"><button class="okbtn">{{icon "check"}} Allow video</button></form>
+      {{if .ChannelID}}<form method="post" action="/pcs/{{.PC.ID}}/requests/{{.ID}}/approve"><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="scope" value="channel"><button>{{icon "check"}} Allow channel</button></form>{{end}}
+      <form method="post" action="/pcs/{{.PC.ID}}/requests/{{.ID}}/deny"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="danger">{{icon "x"}} Deny</button></form>
+    </div>
+  </div>
+  {{end}}
+</section>
+{{end}}
+
+{{if .D.Findings}}
+<section class="card attention">
+  <div class="card-head">
+    <h2>{{icon "globe"}} Other browsers &amp; video apps <span class="count">{{.D.Findings}}</span></h2>
+    <p>YTGuard only controls Chrome — these could be used to watch YouTube without limits. Dismiss anything you're fine with.</p>
+  </div>
+  <div class="scroll">
+  <table class="list">
+    <tr><th>PC</th><th>Who</th><th>App</th><th>What</th><th>Seen</th><th></th></tr>
+    {{range $v := $snap.PCs}}{{range .State.OtherApps}}
+    <tr>
+      <td>{{$v.Name}}</td>
+      <td>{{.Kid}}</td>
+      <td><b>{{.App}}</b><br><code class="small mono">{{.Location}}</code></td>
+      <td>{{if .Running}}<span class="pill bad">{{icon "play"}} running now</span><br>{{end}}<span class="muted small">{{.How}}</span></td>
+      <td class="small">{{datetime .FirstSeen}}{{if ne .FirstSeen .LastSeen}} – {{clock .LastSeen}}{{end}}</td>
+      <td><form method="post" action="/pcs/{{$v.ID}}/findings/dismiss"><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="key" value="{{.Key}}"><button class="ghost small">Dismiss</button></form></td>
+    </tr>
+    {{end}}{{end}}
+  </table>
+  </div>
+</section>
+{{end}}
+
+{{if $snap.Kids}}<div class="section-title">{{icon "users"}} Kids</div>{{end}}
+<div class="grid">
+{{range $snap.Kids}}
+{{$base := printf "/pcs/%s/kids/%d" .PC.ID .ID}}
+<section class="card kid">
+  {{template "kidbanner" .}}
+  <div class="kid-body">
+    <div class="stats">
+      <div class="stat"><span>Used</span><b>{{.UsedMinutes}} min</b></div>
+      <div class="stat"><span>Left</span><b>{{if ge .RemainingMinutes 0}}{{.RemainingMinutes}} min{{else}}∞{{end}}</b></div>
+      <div class="stat"><span>Videos</span><b>{{.TodayVideos}}</b></div>
+    </div>
+    {{if gt .LimitMinutes 0}}{{$p := .Percent}}
+    <div><div class="bar {{level $p}}"><span style="width:{{$p}}%"></span></div>
+      <div class="muted small" style="margin-top:.3rem">{{$p}}% of {{.LimitMinutes}} min today{{if ge .BreakInMinutes 0}} · break in {{.BreakInMinutes}} min{{end}}</div></div>
+    {{else if ge .BreakInMinutes 0}}<div class="muted small">No daily limit · break in {{.BreakInMinutes}} min</div>
+    {{else}}<div class="muted small">No daily limit</div>{{end}}
+    {{if and (not .Allowed) .Message}}<div class="muted small">{{.Message}}</div>{{end}}
+    {{if .VideoTitle}}
+    <a class="video now" href="{{.VideoURL}}" target="_blank" rel="noopener">
+      <span><b>{{.VideoTitle}}</b><span class="muted small">{{.VideoChannel}}</span></span>
+    </a>
+    {{end}}
+    <div class="kid-actions">
+      <span class="btn-group">
+        {{range $m := list "15" "30" "60"}}
+        <form method="post" action="{{$base}}/bonus"><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="minutes" value="{{$m}}"><button class="small">{{icon "plus"}}{{$m}} min</button></form>
+        {{end}}
+      </span>
+      {{if eq .State "locked"}}
+      <form method="post" action="{{$base}}/unlock"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="small okbtn">{{icon "play"}} Unpause</button></form>
+      {{else}}
+      <form method="post" action="{{$base}}/lock"><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="minutes" value="60"><button class="small danger">{{icon "pause"}} Pause 1 h</button></form>
+      <form method="post" action="{{$base}}/lock"><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="minutes" value="0"><button class="small danger">{{icon "pause"}} Pause today</button></form>
+      {{end}}
+      {{if eq .State "break"}}<form method="post" action="{{$base}}/endbreak"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="small okbtn">{{icon "coffee"}} End break</button></form>{{end}}
+    </div>
+    <div class="row between small">
+      <a href="/history?who={{.PC.ID}}:{{.ID}}">{{icon "clock"}} Today's history</a>
+      <a href="{{.PC.URL}}/kids/{{.ID}}" target="_blank" rel="noopener">Settings on {{.PC.Name}} {{icon "arrow-right"}}</a>
+    </div>
+  </div>
+</section>
+{{else}}{{if $snap.PCs}}
+<section class="card"><div class="empty">{{icon "users"}} No kids to show{{if $snap.Offline}} — some PCs aren't reachable{{end}}.</div></section>
+{{end}}{{end}}
+</div>
+{{end}}

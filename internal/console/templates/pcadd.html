@@ -1,0 +1,21 @@
+{{define "content"}}
+<div class="page-head"><div><h1>Add a PC</h1><p>{{.D.Addr}}</p></div></div>
+<section class="card">
+  {{with .D.Error}}<div class="flash err">{{icon "alert"}}<div class="grow">{{.}}</div></div>{{end}}
+  <p><b>1. Check the certificate.</b> The PC's “Connect a console” page should show the same:</p>
+  <p class="pair-code mono" style="font-size:1.5rem;letter-spacing:.06em">{{short .D.Fingerprint}}</p>
+  <p class="muted small">If it's different, stop: something else answered at this address. Full fingerprint: <code class="mono small">{{pretty .D.Fingerprint}}</code></p>
+  <form method="post" action="/pcs/pair" class="stack narrowform">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <input type="hidden" name="addr" value="{{.D.Addr}}">
+    <input type="hidden" name="fingerprint" value="{{.D.Fingerprint}}">
+    <label><span><b>2. Enter the 6-digit code</b> shown on the PC</span>
+      <input name="code" inputmode="numeric" autocomplete="one-time-code" placeholder="123 456" maxlength="9" autofocus class="mono" style="font-size:1.3rem;letter-spacing:.15em"></label>
+    <label>Name in the console <small class="muted">optional — defaults to the PC's own name</small><input name="name" value="{{.D.Name}}" maxlength="40"></label>
+    <details><summary class="small">No code? Use an API token instead</summary>
+      <label style="margin-top:.5rem">API token <small class="muted">from the PC's Security page, with read, control and admin</small><input name="token" autocomplete="off" class="mono"></label>
+    </details>
+    <div class="row"><button class="primary">{{icon "check"}} Connect</button><a class="button ghost" href="/pcs">Cancel</a></div>
+  </form>
+</section>
+{{end}}

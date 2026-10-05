@@ -1,0 +1,60 @@
+{{define "content"}}
+{{$kids := .D.KidNames}}
+<div class="page-head"><div><h1>Shared lists</h1><p>Public filter lists and which PCs use them. Choose the kids and what the list does, then apply it to every PC at once. Kids are matched by name across PCs.</p></div></div>
+{{with .D.CatalogError}}<div class="flash warn">{{icon "info"}}<div class="grow">Couldn't load the recommended lists: {{.}}</div></div>{{end}}
+<details class="card help">
+  <summary>{{icon "info"}} How this works</summary>
+  <p><b>Mixed</b> (default) follows the list author's choice for each entry — clearly inappropriate videos are hidden, borderline ones blocked so the kid can ask.
+    <b>Block everything</b> shows every match with a lock; <b>Hide everything</b> removes them all. Your own filter entries always win over a list's.</p>
+  <p><b>Apply to all PCs</b> subscribes PCs that don't have the list yet and updates the ones that do. If you pick particular kids, a PC with none of them doesn't get the list (and it's turned off there if it had it).</p>
+</details>
+
+<section class="card">
+  {{range .D.Rows}}{{$row := .}}
+  <div class="list-item">
+    <div class="li-head">
+      <div class="li-title"><b>{{.Title}}</b>{{with .Ages}} <span class="chip">ages {{.}}</span>{{end}}{{if not .Catalog}} <span class="chip">custom</span>{{end}}</div>
+      {{if .Have}}<div class="li-actions">
+        <form method="post" action="/lists/refresh"><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="url" value="{{.URL}}"><button class="small" title="Download the newest version on every PC now">{{icon "refresh"}} Update now</button></form>
+        <form method="post" action="/lists/remove" data-confirm="Unsubscribe every PC from {{.Title}}?"><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="url" value="{{.URL}}"><button class="ghost small">Unsubscribe all</button></form>
+      </div>{{end}}
+    </div>
+    {{with .Description}}<p class="li-desc">{{.}}</p>{{end}}
+    <div class="pc-status">
+      {{range .Cells}}
+      <span class="pc-tag{{if eq .State "on"}} on{{end}}">{{icon "devices"}} {{.PC}}:
+        {{if eq .State "on"}}<b>{{title .Mode}}</b> · {{if .Kids}}{{join .Kids ", "}}{{else}}all kids{{end}}{{with .Error}} · <span class="bad-text" title="{{.}}">update failed</span>{{end}}
+        {{else if eq .State "off"}}off{{else if eq .State "no"}}not used{{else}}offline{{end}}</span>
+      {{end}}
+    </div>
+    <form method="post" action="/lists/apply" class="li-controls">
+      <input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="url" value="{{.URL}}">
+      <select name="mode" aria-label="What this list does">
+        <option value="mixed" {{if eq .Mode "mixed"}}selected{{end}}>Mixed (as the list marks each entry)</option>
+        <option value="block" {{if eq .Mode "block"}}selected{{end}}>Block everything (kid can ask)</option>
+        <option value="hide" {{if eq .Mode "hide"}}selected{{end}}>Hide everything (never shown)</option>
+      </select>
+      <span class="li-kids"><span class="muted">for</span>
+        <label class="check"><input type="checkbox" name="kid" value="all" {{if or .AllKids (not .Have)}}checked{{end}}> All kids</label>
+        {{range $kids}}<label class="check"><input type="checkbox" name="kid" value="{{.}}" {{if and (not $row.AllKids) ($row.Checked .)}}checked{{end}}> {{.}}</label>{{end}}</span>
+      <button class="small {{if .Have}}primary{{else}}okbtn{{end}} li-go">{{icon "check"}} {{if .Have}}Apply to all PCs{{else}}Subscribe all PCs{{end}}</button>
+    </form>
+  </div>
+  {{else}}<div class="empty">{{icon "list"}} No lists to show.</div>{{end}}
+</section>
+
+<section class="card">
+  <div class="card-head"><h2>{{icon "plus"}} Subscribe to another list</h2><p>Any YTGuard filter list on an https:// address.</p></div>
+  <form method="post" action="/lists/apply" class="stack">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <input name="url" type="url" required placeholder="https://…/list.txt" aria-label="List address">
+    <div class="li-controls" style="margin-top:0">
+      <select name="mode" aria-label="What this list does"><option value="mixed">Mixed (as the list marks each entry)</option><option value="block">Block everything (kid can ask)</option><option value="hide">Hide everything (never shown)</option></select>
+      <span class="li-kids"><span class="muted">for</span>
+        <label class="check"><input type="checkbox" name="kid" value="all" checked> All kids</label>
+        {{range $kids}}<label class="check"><input type="checkbox" name="kid" value="{{.}}"> {{.}}</label>{{end}}</span>
+      <button class="small primary li-go">{{icon "plus"}} Subscribe all PCs</button>
+    </div>
+  </form>
+</section>
+{{end}}

@@ -20,6 +20,7 @@ import (
 //	control POST /api/v1/kids/{kid}/bonus|lock|unlock|end-break, /api/v1/requests/{id}/approve|deny
 //	admin   GET/POST /api/v1/rules, DELETE /api/v1/rules/{id}
 //
+// More calls for the YTGuard console are in pair.go.
 // {kid} is a kid ID, name or Linux user.
 
 type apiHandler func(w http.ResponseWriter, r *http.Request, t store.APIToken)
@@ -315,8 +316,24 @@ func (s *Server) apiRuleAdd(w http.ResponseWriter, r *http.Request, t store.APIT
 		return
 	}
 	if ru.Type == rules.TypeKeyword {
+		if ru.Match != rules.MatchRegex && ru.Match != rules.MatchSubstring {
+			ru.Match = rules.MatchWord
+		}
+		if len(ru.Fields) == 0 {
+			ru.Fields = []string{rules.FieldTitle}
+		}
 		if err := rules.ValidateKeyword(ru.Value, ru.Match); err != nil {
 			apiError(w, 400, err.Error())
+			return
+		}
+	}
+	if err := s.apiResolve(r, &ru); err != nil {
+		apiError(w, 400, err.Error())
+		return
+	}
+	if ru.KidID != 0 {
+		if _, err := s.App.St.Kid(ru.KidID); err != nil {
+			apiError(w, 400, "unknown kid")
 			return
 		}
 	}

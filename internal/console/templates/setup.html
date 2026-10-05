@@ -1,0 +1,19 @@
+{{define "content"}}
+<div class="card narrow">
+  <div class="login-brand"><img src="/static/icon.svg" alt=""><h1>Welcome</h1></div>
+  {{if .D.Local}}
+  <p class="muted">Create the login for this YTGuard console. It's separate from the logins on your kids' PCs.</p>
+  {{with .D.Error}}<div class="flash err">{{icon "alert"}}<div class="grow">{{.}}</div></div>{{end}}
+  <form method="post" action="/setup" class="stack">
+    <label>Console name <input name="name" value="{{.D.Name}}" maxlength="40"><small class="muted">Shown on each kid PC's Security page next to the console's access.</small></label>
+    <label>Username <input name="username" value="parent" autocomplete="username" required></label>
+    <label>Password <input name="password" type="password" minlength="4" autocomplete="new-password" required autofocus></label>
+    <label>Repeat password <input name="confirm" type="password" minlength="4" autocomplete="new-password" required></label>
+    <label class="switch"><input type="checkbox" name="phone"> Allow phones and other devices <small class="muted">— use the console from your phone on your home network or VPN. You can change this under Settings.</small></label>
+    <button class="primary">{{icon "check"}} Create login</button>
+  </form>
+  {{else}}
+  <div class="flash warn">{{icon "info"}}<div class="grow">Finish setting up on the computer the console runs on: open <code>http://127.0.0.1:8444</code> there, or run <code>ytguard console passwd</code>.</div></div>
+  {{end}}
+</div>
+{{end}}

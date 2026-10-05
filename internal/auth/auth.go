@@ -241,6 +241,18 @@ func (a *Auth) Token(tok, ip string) (store.APIToken, error) {
 	return t, err
 }
 
+// Throttled returns a LockedError while ip is locked out by failed logins,
+// bad tokens or bad pairing codes.
+func (a *Auth) Throttled(ip string) error {
+	if wait := a.lim.wait(ip, a.Now()); wait > 0 {
+		return LockedError{wait}
+	}
+	return nil
+}
+
+// Failed counts a failed attempt from ip towards its lockout.
+func (a *Auth) Failed(ip string) { a.lim.fail(ip, a.Now()) }
+
 // limiter does per-IP exponential lockout plus a global brake.
 type limiter struct {
 	mu     sync.Mutex

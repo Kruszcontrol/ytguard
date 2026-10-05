@@ -44,4 +44,17 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
   document.querySelectorAll('[data-select]').forEach(i => i.addEventListener('focus', () => i.select()));
+  // Live pages (the console dashboard) reload now and then, unless the
+  // parent is busy with a form or menu. Old messages aren't shown again.
+  const live = document.querySelector('[data-autorefresh]');
+  if (live) {
+    const secs = Math.max(10, Number(live.dataset.autorefresh) || 30);
+    setInterval(() => {
+      const busy = document.activeElement?.matches('input, select, textarea') || document.querySelector('details[open]');
+      if (document.visibilityState !== 'visible' || busy) return;
+      const u = new URL(location.href);
+      u.searchParams.delete('msg'); u.searchParams.delete('err');
+      location.replace(u.toString());
+    }, secs * 1000);
+  }
 });

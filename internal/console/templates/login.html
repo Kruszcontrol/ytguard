@@ -1,0 +1,15 @@
+{{define "content"}}
+<div class="card narrow">
+  <div class="login-brand"><img src="/static/icon.svg" alt=""><h1>YTGuard console</h1></div>
+  <p class="muted">{{if .Name}}<b>{{.Name}}</b> · {{end}}Log in to manage all your kids' PCs.</p>
+  {{with .D.Error}}<div class="flash err">{{icon "alert"}}<div class="grow">{{.}}</div></div>{{end}}
+  <form method="post" action="/login" class="stack">
+    <input type="hidden" name="next" value="{{.D.Next}}">
+    <label>Username <input name="username" autocomplete="username" required autofocus value="{{.D.Username}}"></label>
+    <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
+    <label class="switch"><input type="checkbox" name="remember" checked> Remember this device</label>
+    <button class="primary">Log in</button>
+  </form>
+  <p class="muted small">Forgot the password? On the computer running the console, run <code>ytguard console passwd</code>.</p>
+</div>
+{{end}}

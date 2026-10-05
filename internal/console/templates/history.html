@@ -1,0 +1,64 @@
+{{define "content"}}
+<div class="page-head"><div><h1>History</h1><p>What each kid watched, and what was blocked or hidden.</p></div></div>
+{{if not .D.Kids}}
+<section class="card"><div class="empty">{{icon "users"}} No kids to show. <a href="/pcs">Check your PCs</a>.</div></section>
+{{else}}
+{{$cur := .D.Cur}}{{$h := .D.H}}
+<section class="card">
+  <form method="get" action="/history" class="row wrap filterbar">
+    <label>Kid
+      <select name="who" data-autosubmit>
+        {{range .D.Kids}}{{$v := printf "%s:%d" .PC.ID .ID}}<option value="{{$v}}" {{if eq $v $.D.Who}}selected{{end}}>{{.Name}} · {{.PC.Name}}</option>{{end}}
+      </select></label>
+    <label>Day <input type="date" name="day" value="{{.D.Day}}" data-autosubmit></label>
+    <span class="btn-group">
+      <a class="button ghost" href="/history?who={{.D.Who}}&amp;day={{.D.Prev}}">‹ Previous</a>
+      {{if not .D.Today}}<a class="button ghost" href="/history?who={{.D.Who}}&amp;day={{.D.Next}}">Next ›</a>{{end}}
+    </span>
+  </form>
+</section>
+{{with .D.Error}}<div class="flash err">{{icon "alert"}}<div class="grow">{{.}}</div></div>{{else}}
+<div class="section-title">{{icon "clock"}} {{$cur.Name}} on {{$cur.PC.Name}} · {{.D.Day}} · {{$h.UsedMinutes}} min{{if gt $h.LimitMinutes 0}} of {{$h.LimitMinutes}}{{end}}</div>
+<section class="card">
+  <div class="card-head">
+    <h2>{{icon "video"}} Watched <span class="pill">{{len $h.Watches}}</span></h2>
+    <label class="check small">Quick buttons apply to
+      <select data-quick-scope>
+        <option value="{{$cur.Name}}">{{$cur.Name}} only</option>
+        <option value="all">all kids</option>
+        {{range .D.KidNames}}{{if ne . $cur.Name}}<option value="{{.}}">{{.}} only</option>{{end}}{{end}}
+      </select> on every PC</label>
+  </div>
+  {{range $h.Watches}}
+  <div class="request">
+    <a class="video" href="{{watch .VideoID}}" target="_blank" rel="noopener">
+      <img src="{{thumb .VideoID}}" alt="" loading="lazy">
+      <span><b>{{.Title}}</b><span class="muted small">{{.ChannelName}} · {{clock .FirstSeen}} · {{mins .Seconds}}</span></span>
+    </a>
+    <div class="actions">
+      {{template "quick" (qa $.CSRF 0 "hide" "deny" "video" .VideoID .Title "Hide video")}}
+      {{if .ChannelID}}{{template "quick" (qa $.CSRF 0 "hide" "deny" "channel" .ChannelID .ChannelName "Hide channel")}}
+      {{template "quick" (qa $.CSRF 0 "block" "deny" "channel" .ChannelID .ChannelName "Block channel")}}{{end}}
+    </div>
+  </div>
+  {{else}}<div class="empty">{{icon "video"}} Nothing watched that day.</div>{{end}}
+</section>
+<section class="card">
+  <div class="card-head"><h2>{{icon "lock"}} Blocked &amp; hidden <span class="pill">{{len $h.Events}}</span></h2></div>
+  {{range $h.Events}}
+  <div class="request">
+    <a class="video" href="{{watch .VideoID}}" target="_blank" rel="noopener">
+      <img src="{{thumb .VideoID}}" alt="" loading="lazy">
+      <span><b>{{if .Title}}{{.Title}}{{else}}{{.VideoID}}{{end}}</b><span class="muted small"><span class="tag {{.Kind}}">{{.Kind}}</span> {{.ChannelName}} · {{clock .TS}} · {{.Reason}}</span></span>
+    </a>
+    {{if eq .Kind "blocked"}}<div class="actions">
+      {{template "quick" (qa $.CSRF 0 "block" "allow" "video" .VideoID .Title "Allow video")}}
+      {{if .ChannelID}}{{template "quick" (qa $.CSRF 0 "block" "allow" "channel" .ChannelID .ChannelName "Allow channel")}}{{end}}
+    </div>{{end}}
+  </div>
+  {{else}}<div class="empty">{{icon "check"}} Nothing blocked or hidden that day.</div>{{end}}
+</section>
+{{end}}
+{{end}}
+{{end}}
+{{define "quick"}}<form method="post" action="/filters/add" data-quick><input type="hidden" name="csrf" value="{{.CSRF}}"><input type="hidden" name="kid" value="all"><input type="hidden" name="pcs" value="all"><input type="hidden" name="tier" value="{{.Tier}}"><input type="hidden" name="list" value="{{.List}}"><input type="hidden" name="type" value="{{.Type}}"><input type="hidden" name="value" value="{{.Value}}"><input type="hidden" name="label" value="{{.Label}}"><input type="hidden" name="note" value="added from history in the console"><button class="small {{if eq .List "allow"}}okbtn{{else if eq .Tier "hide"}}danger{{end}}">{{.Text}}</button></form>{{end}}

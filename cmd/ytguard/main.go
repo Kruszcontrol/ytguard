@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -26,6 +27,7 @@ import (
 	"ytguard/internal/filterlist"
 	"ytguard/internal/hamqtt"
 	"ytguard/internal/install"
+	"ytguard/internal/pairing"
 	"ytguard/internal/report"
 	"ytguard/internal/store"
 	"ytguard/internal/timekeeper"
@@ -44,18 +46,26 @@ Usage:
   ytguard report --kid NAME [--day YYYY-MM-DD] [--send] [--html]
   ytguard policy                  print the Chrome policy JSON
   ytguard list-check FILE...      check filter list files for mistakes
+  ytguard console [--listen ADDR] manage several YTGuard PCs from one page
+                                  (also runs on Windows and macOS)
   ytguard version
 
 Most commands take --data DIR (default ` + install.DataDir + `).
 `
 
 func main() {
+	if runtime.GOOS != "linux" {
+		otherOS()
+		return
+	}
 	if len(os.Args) < 2 {
 		fmt.Print(usage)
 		os.Exit(2)
 	}
 	var err error
 	switch cmd, args := os.Args[1], os.Args[2:]; cmd {
+	case "console":
+		err = cmdConsole(args)
 	case "serve":
 		err = serve(args)
 	case "install":
@@ -289,6 +299,7 @@ func serve(args []string) error {
 			return fmt.Errorf("tls certificate: %w", err)
 		}
 		adminSrv.TLSConfig = &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12}
+		ui.CertFingerprint = pairing.Fingerprint(cert.Certificate[0])
 		slog.Info("admin certificate", "sha256", install.Fingerprint(cert))
 	}
 
@@ -374,4 +385,37 @@ func firstNonEmpty(s ...string) string {
 		}
 	}
 	return ""
+}
+
+// otherOS runs on Windows and macOS, where only the console makes sense
+// (kid PCs run Linux). Started without arguments, e.g. by double-clicking,
+// it opens the console in the browser.
+func otherOS() {
+	var err error
+	args := os.Args[1:]
+	switch {
+	case len(args) == 0:
+		err = runConsole(defaultConsoleDir(), "127.0.0.1:8444", true)
+	case args[0] == "console":
+		err = cmdConsole(args[1:])
+	case args[0] == "list-check":
+		err = listCheck(args[1:])
+	case args[0] == "version", args[0] == "--version", args[0] == "-v":
+		fmt.Println("ytguard", ytguard.Version)
+	default:
+		fmt.Print(consoleUsage)
+		fmt.Println("\nOn this computer YTGuard runs as the console. The other commands are for the kids' Linux PCs.")
+		if args[0] != "help" && args[0] != "--help" && args[0] != "-h" {
+			os.Exit(2)
+		}
+	}
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
+		if len(args) == 0 {
+			// Started by double-clicking: keep the window open to show why.
+			fmt.Fprintln(os.Stderr, "Press Enter to close.")
+			fmt.Scanln()
+		}
+		os.Exit(1)
+	}
 }

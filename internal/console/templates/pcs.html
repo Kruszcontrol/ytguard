@@ -1,0 +1,48 @@
+{{define "content"}}
+<div class="page-head"><div><h1>PCs</h1><p>The kids' PCs this console manages.</p></div></div>
+
+<section class="card">
+  <div class="card-head"><h2>{{icon "plus"}} Add a PC</h2>
+    <p>On the kid's PC, log in to YTGuard and open <b>Security → Connect a console</b>. Then enter that PC's address here (its IP or name — the same address you'd use in a browser).</p></div>
+  <form method="post" action="/pcs/probe" class="row wrap">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <input name="addr" required placeholder="192.168.1.20 or kids-pc.local" class="grow" autofocus>
+    <button class="primary">{{icon "arrow-right"}} Next</button>
+  </form>
+</section>
+
+{{with .D.Snap.PCs}}
+<section class="card">
+  <div class="card-head"><h2>{{icon "devices"}} Your PCs <span class="pill">{{len .}}</span></h2></div>
+  <div class="pc-list">
+  {{range .}}
+  <div class="pc-row">
+    <div>
+      <div class="pc-name"><span class="dot {{if .Online}}ok{{else if .CertChanged}}bad{{else}}warn{{end}}"></span> {{.Name}}
+        {{if .Online}}<span class="pill ok">online</span>{{else if .CertChanged}}<span class="pill bad">certificate changed</span>{{else}}<span class="pill warn">not reachable</span>{{end}}
+        {{if .Online}}<span class="chip">YTGuard {{.State.YTGuard.Version}}</span>{{if .State.YTGuard.UpdateAvailable}} <span class="chip">{{.State.YTGuard.Latest}} available</span>{{end}}{{end}}
+      </div>
+      <div class="muted small">{{.Addr}}{{if .Online}} · {{len .State.Kids}} {{if eq (len .State.Kids) 1}}kid{{else}}kids{{end}}{{range $i, $k := .State.Kids}}{{if $i}},{{else}}:{{end}} {{$k.Name}}{{end}}{{end}} · certificate <code class="mono small">{{short .Fingerprint}}</code> · added {{datetime .AddedAt}}</div>
+      {{if and (not .Online) (not .CertChanged)}}<div class="small" style="margin-top:.3rem">{{.Err}}</div>{{end}}
+      {{if .CertChanged}}
+      <div class="flash err" style="margin:.6rem 0 0">{{icon "alert"}}<div class="grow">
+        <b>{{.Name}} presented a different certificate.</b> This happens if YTGuard was reinstalled with <code>--purge</code> or its certificate was replaced — or if another device is pretending to be this PC. Open <a href="{{.URL}}/security" target="_blank" rel="noopener">its Security page</a> and check its certificate starts with <code class="mono">{{short .CertChanged}}</code> before trusting it.
+        <form method="post" action="/pcs/{{.ID}}/trust" style="margin-top:.5rem"><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="fingerprint" value="{{.CertChanged}}"><button class="small danger">I checked — trust the new certificate</button></form>
+      </div></div>
+      {{end}}
+    </div>
+    <div class="li-actions">
+      <a class="button small ghost" href="{{.URL}}" target="_blank" rel="noopener">Open {{icon "arrow-right"}}</a>
+      <details class="menu"><summary class="button small ghost">More</summary>
+        <div class="menu-panel stack" style="padding:.7rem;min-width:260px">
+          <form method="post" action="/pcs/{{.ID}}/rename" class="row"><input type="hidden" name="csrf" value="{{$.CSRF}}"><input name="name" value="{{.Name}}" maxlength="40" class="grow" aria-label="Name"><button class="small">Rename</button></form>
+          <form method="post" action="/pcs/{{.ID}}/remove" data-confirm="Remove {{.Name}} from the console? Its YTGuard keeps working; the console's access to it is revoked."><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="small danger">{{icon "trash"}} Remove from console</button></form>
+        </div>
+      </details>
+    </div>
+  </div>
+  {{end}}
+  </div>
+</section>
+{{end}}
+{{end}}

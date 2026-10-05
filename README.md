@@ -9,6 +9,7 @@ Family YouTube controls for Linux Mint (or any systemd Linux) + Google Chrome.
 - **Approval requests**: the kid taps "Ask a parent"; you approve the video or its whole channel from the web UI or a Home Assistant phone notification.
 - **Daily report** per kid of every video watched, plus blocked/hidden attempts, by **email** and/or **Home Assistant**.
 - **Remote web UI** on each PC (HTTPS, app password, "remember this device"), built for phones and desktops, with themes: Light, Dark, Match device, Ocean, Sunset and Forest.
+- **YTGuard console** for several PCs: one page on your own computer (Linux, Windows or Mac) with every kid, one approval queue, alerts, history, and filters and shared lists you can apply to all PCs at once. No Home Assistant needed.
 - **Home Assistant**: over MQTT, each PC and each kid appear automatically as devices (time used/left, watching now, pause switch, +time buttons, update notices). A ready-made blueprint sends approval requests to your phone with Allow/Deny buttons, for every PC. A webhook and a REST API with scoped tokens are there as an alternative.
 
 ## How it works
@@ -31,7 +32,7 @@ Kid's Chrome ── YTGuard extension (force-installed by Chrome policy, can't b
 
 ## Get it
 
-**Download a release** (recommended). Go to the repository's **Releases** page, download `ytguard-linux-amd64` (or `-arm64`) and `SHA256SUMS` to each kid PC, then:
+**Download a release** (recommended). Go to the repository's **Releases** page, download `ytguard-linux-amd64` (or `-arm64`) and `SHA256SUMS` to each kid PC, then (for the Windows/Mac console download, see [the console](#managing-several-pcs-the-console)):
 
 ```bash
 sha256sum --check --ignore-missing SHA256SUMS
@@ -207,11 +208,40 @@ YTGuard cleans up once a day so it can't fill the disk: watch history, blocked a
 
 Sent daily at the configured time (default 20:30). If the PC is off then, the report goes out at the next start. Email works with any SMTP server. For Gmail, use an app password with `smtp.gmail.com:587` and STARTTLS. Home Assistant receives it as a `daily_report` event (MQTT or webhook). See [docs/home-assistant.md](docs/home-assistant.md).
 
+## Managing several PCs: the console
+
+Each kid PC has its own web UI. With more than one PC, the **YTGuard console** puts them on one page: every kid's time and status, all approval requests in one queue, other-browser alerts and update notices, history, and your filters and shared lists side by side, so you can add a rule or subscribe to a list on every PC at once. (Home Assistant users get much of this through MQTT already; the console is for everyone else, and works alongside it.)
+
+The console is the same `ytguard` program, run on **your** computer rather than a kid's:
+
+- **Windows / Mac**: download `ytguard-windows-amd64.exe` or `ytguard-macos-arm64` (Apple silicon) / `ytguard-macos-amd64` (Intel) from Releases and double-click it (on a Mac, the first time: right-click → Open). It opens the console in your browser. Keep its window open while you use it.
+- **Linux**: `ytguard console --open`.
+
+The first time, choose a console username and password (separate from the kid PCs' logins). Then add each PC:
+
+1. On the kid's PC (or any browser pointed at it), log in to YTGuard and open **Security → Connect a console**. It shows a 6-digit code and the PC's certificate.
+2. In the console, open **PCs**, enter the PC's address (e.g. `192.168.1.20`), and check the certificate shown matches.
+3. Type the code. Done — the PC appears on the dashboard.
+
+How it stays safe:
+
+- The PC gives the console its **own API token** (listed on the PC's Security page as "Console: …"; revoke it there any time). Removing a PC in the console revokes it too.
+- The kid PCs use self-signed certificates, so the console **pins each PC's certificate** when pairing and refuses to talk to anything else at that address. The pairing code is never sent; the console proves it knows the code with an HMAC tied to the certificate it sees, so a device in the middle can't relay the pairing. Codes expire after 10 minutes and are cancelled after 5 wrong tries.
+- If a PC's certificate changes (e.g. after `uninstall --purge` and a reinstall), the console stops using it and shows the new certificate; compare it with the PC's Security page before trusting it.
+- The console answers on the computer it runs on at `http://127.0.0.1:8444`, and only to requests addressed to a local name, which blocks DNS-rebinding tricks from web pages.
+- **Phone access** (Settings → Phone access, or the switch in first-run setup) also serves the console over HTTPS on port 8445 to other devices, as long as the console is running. It's for your home network or a VPN (e.g. Tailscale, WireGuard): connections from public internet addresses are always refused, even if a router forwards the port by mistake. The page shows the address to open on your phone and the certificate to compare with the phone's one-time warning. Anyone who can log in to the console controls every paired PC, so use a password your kids can't guess.
+- The console keeps its data (login, PC list and tokens) in your user's config folder (`~/.config/ytguard-console`, `%AppData%\ytguard-console` or `~/Library/Application Support/ytguard-console`), readable only by you. Forgot the console password? Run `ytguard console passwd`.
+
+Kid-specific rules and lists are matched across PCs by the kid's name, so name each kid the same on every PC. On **Shared lists**, pick the mode and the kids for a list and press *Apply to all PCs*: PCs without it subscribe, PCs with it are updated, and a PC with none of the chosen kids doesn't use it. PCs running an older YTGuard work for the dashboard but say "upgrade" for newer features.
+
+To start the console automatically on Linux, add it to your desktop's startup applications (`ytguard console`); on Windows, put a shortcut to the .exe in `shell:startup`.
+
 ## Authentication
 
 | Access | Credential |
 |---|---|
 | You, in a browser | YTGuard admin username/password (stored as PBKDF2-SHA256). "Remember this device" keeps you logged in for 90 days (configurable). Each device can be signed out from Security. Changing the password signs out everything. |
+| YTGuard console | Its own username/password on your computer. Talks to each PC with an API token the PC issued at pairing, over HTTPS with the PC's certificate pinned. |
 | Home Assistant / scripts | Named API tokens with scopes `read`, `control`, `admin`. Sent as `Authorization: Bearer …`. Stored hashed. Can't open the web UI. |
 | Kid's extension | No credential. Talks only to 127.0.0.1 and is identified by Linux user. This API has no admin functions. |
 | Forgot password | `sudo ytguard passwd` on the PC (local only). |
@@ -249,8 +279,12 @@ ytguard serve [--data DIR] [--admin-addr ADDR] [--admin-http] [--trust-proxy] [-
 ytguard report --kid NAME [--day YYYY-MM-DD] [--send] [--html]
 ytguard policy
 ytguard list-check FILE...
+ytguard console [--data DIR] [--open]
+ytguard console passwd [--data DIR]
 ytguard version [-v]
 ```
+
+On Windows and macOS only `console`, `list-check` and `version` exist; started without arguments, the program runs the console.
 
 Logs: `journalctl -u ytguard -f`.
 
@@ -261,7 +295,7 @@ git tag v1.2.0
 git push origin v1.2.0
 ```
 
-The `release` GitHub Action runs the tests, builds `ytguard-linux-amd64` and `ytguard-linux-arm64` stamped with the tag and repository, and publishes them with `SHA256SUMS` and generated release notes. Tags with a suffix (`v1.3.0-rc1`) become pre-releases, which installed copies don't offer as updates. Forks automatically check their own repository.
+The `release` GitHub Action runs the tests, builds `ytguard-linux-amd64` and `ytguard-linux-arm64` (plus console builds `ytguard-windows-amd64.exe`, `ytguard-macos-amd64` and `ytguard-macos-arm64`) stamped with the tag and repository, and publishes them with `SHA256SUMS` and generated release notes. Tags with a suffix (`v1.3.0-rc1`) become pre-releases, which installed copies don't offer as updates. Forks automatically check their own repository.
 
 Versioning: bump the patch number for fixes, the minor number for features, and the major number for changes that need manual steps. The Chrome extension version comes from the tag, so every release reaches the kids' Chrome automatically.
 

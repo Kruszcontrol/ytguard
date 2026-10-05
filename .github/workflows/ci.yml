@@ -15,5 +15,9 @@ jobs:
       - run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
       - run: go vet ./...
       - run: go test ./...
-      - name: Check extension JavaScript
-        run: for f in extension/*.js; do node --check "$f"; done
+      - name: Check JavaScript
+        run: for f in extension/*.js internal/admin/static/*.js; do node --check "$f"; done
+      - name: Console builds for Windows and macOS
+        run: |
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o /dev/null ./cmd/ytguard
+          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o /dev/null ./cmd/ytguard

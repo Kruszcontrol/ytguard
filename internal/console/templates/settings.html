@@ -1,0 +1,70 @@
+{{define "content"}}
+{{$csrf := .CSRF}}{{$cur := .D.Current}}{{$ph := .D.Phone}}
+<div class="page-head"><div><h1>Settings</h1><p>This console's name, phone access, login and security.</p></div></div>
+<div class="settings-layout">
+<nav class="toc" aria-label="Settings sections">
+  <a href="#name">{{icon "devices"}} Console name</a>
+  <a href="#phone">{{icon "globe"}} Phone access</a>
+  <a href="#password">{{icon "key"}} Password</a>
+  <a href="#devices">{{icon "shield"}} Signed-in devices</a>
+  <a href="#activity">{{icon "list"}} Activity log</a>
+</nav>
+<div>
+<section class="card" id="name">
+  <div class="card-head"><h2>{{icon "devices"}} Console name</h2><p>Shown on each kid PC's Security page, next to the console's access token, so you can tell what has access.</p></div>
+  <form method="post" action="/settings/name" class="row wrap"><input type="hidden" name="csrf" value="{{$csrf}}"><input name="name" value="{{.Name}}" maxlength="40" required aria-label="Console name"><button class="primary">{{icon "check"}} Save</button></form>
+</section>
+
+<section class="card" id="phone">
+  <div class="card-head"><h2>{{icon "globe"}} Phone access</h2>
+    <p>Use the console from your phone or another computer while it's running here. Works on your home network and over a VPN (e.g. Tailscale or WireGuard); connections from the internet are always refused.</p></div>
+  {{if $ph.Running}}
+  <div class="flash ok">{{icon "check"}}<div class="grow"><b>On.</b> On your phone, open
+    {{range $i, $u := $ph.URLs}}{{if $i}} or {{end}}<a href="{{$u}}"><code>{{$u}}</code></a>{{else}}<code>https://&lt;this computer's address&gt;:{{$ph.Port}}</code>{{end}}
+    <div class="small" style="margin-top:.35rem">The first time, the phone warns that the certificate isn't trusted — it's this console's own certificate.
+      Check it starts with <code class="mono">{{short $ph.Fingerprint}}</code>, then continue (“Advanced → Proceed”). Then use “Add to Home screen” for an app-like icon.</div></div></div>
+  {{else if $ph.Error}}
+  <div class="flash err">{{icon "alert"}}<div class="grow"><b>Couldn't turn on phone access:</b> {{$ph.Error}}</div></div>
+  {{end}}
+  <form method="post" action="/settings/phone" class="li-controls">
+    <input type="hidden" name="csrf" value="{{$csrf}}">
+    <label class="switch"><input type="checkbox" name="enabled" {{if $ph.Enabled}}checked{{end}}> Allow phones and other devices</label>
+    <label class="check">Port <input name="port" type="number" min="1024" max="65535" value="{{$ph.Port}}" class="short"></label>
+    <button class="small primary li-go">{{icon "check"}} Save</button>
+  </form>
+  <p class="muted small" style="margin-bottom:0">Anyone who logs in here controls every paired PC, so use a password your kids can't guess. If the phone can't connect, the computer's firewall may need to allow the port: Windows asks the first time (allow “Private networks”); on Linux with a firewall turned on, run <code>sudo ufw allow {{$ph.Port}}/tcp</code>.</p>
+</section>
+
+<section class="card" id="password">
+  <div class="card-head"><h2>{{icon "key"}} Password</h2><p>The console's own login, separate from the kid PCs'. Changing it signs out every device. Forgot it? Run <code>ytguard console passwd</code> on this computer.</p></div>
+  <form method="post" action="/settings/password" class="stack narrowform">
+    <input type="hidden" name="csrf" value="{{$csrf}}">
+    <label>Username <input name="username" value="{{.D.User}}" autocomplete="username"></label>
+    <label>Current password <input name="current" type="password" required autocomplete="current-password"></label>
+    <label>New password <input name="new" type="password" required minlength="{{.D.MinPw}}" autocomplete="new-password"></label>
+    <label>Confirm new password <input name="confirm" type="password" required minlength="{{.D.MinPw}}" autocomplete="new-password"></label>
+    <button class="primary">{{icon "check"}} Change login</button>
+  </form>
+</section>
+
+<section class="card scroll" id="devices">
+  <div class="card-head"><h2>{{icon "shield"}} Signed-in devices</h2><p>Browsers logged in to this console. Sign out any you don't recognise.</p></div>
+  <table class="list">
+    <tr><th>Device</th><th>Last used</th><th>IP</th><th>Expires</th><th></th></tr>
+    {{range .D.Sessions}}
+    <tr><td>{{.Name}} {{if eq .ID $cur}}<span class="pill ok">this device</span>{{end}}</td><td>{{datetime .LastUsed}}</td><td>{{.IP}}</td><td>{{datetime .ExpiresAt}}{{if not .Remember}} (session){{end}}</td>
+      <td><form method="post" action="/settings/sessions/{{.ID}}/revoke"><input type="hidden" name="csrf" value="{{$csrf}}"><button class="ghost small">Sign out</button></form></td></tr>
+    {{end}}
+  </table>
+</section>
+
+<section class="card scroll" id="activity">
+  <div class="card-head"><h2>{{icon "list"}} Activity log</h2><p>Logins and changes made from this console.</p></div>
+  <table class="list small">
+    <tr><th>When</th><th>Who</th><th>IP</th><th>What</th></tr>
+    {{range .D.Audit}}<tr><td>{{datetime .TS}}</td><td>{{.Actor}}</td><td>{{.IP}}</td><td>{{.Action}}{{if .Detail}} — {{.Detail}}{{end}}</td></tr>{{end}}
+  </table>
+</section>
+</div>
+</div>
+{{end}}

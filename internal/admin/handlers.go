@@ -17,6 +17,7 @@ import (
 	"ytguard/internal/core"
 	"ytguard/internal/filterlist"
 	"ytguard/internal/notify"
+	"ytguard/internal/pairing"
 	"ytguard/internal/report"
 	"ytguard/internal/rules"
 	"ytguard/internal/store"
@@ -925,7 +926,7 @@ func (s *Server) securityPage(w http.ResponseWriter, r *req) {
 	audit, _ := s.App.St.AuditLog(100)
 	user, _, _ := s.App.St.Admin()
 	s.page(w, r, "security", map[string]any{"Sessions": sessions, "Tokens": tokens, "Audit": audit, "Current": r.Session.ID,
-		"User": user, "Scopes": auth.Scopes})
+		"User": user, "Scopes": auth.Scopes, "Fingerprint": pairing.Pretty(s.CertFingerprint)})
 }
 
 func (s *Server) passwordChange(w http.ResponseWriter, r *req) {

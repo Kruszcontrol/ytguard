@@ -28,9 +28,15 @@
   </table>
   <form method="post" action="/security/sessions/revoke-all" data-confirm="Sign out every device, including this one?"><input type="hidden" name="csrf" value="{{$csrf}}"><button class="danger">{{icon "logout"}} Sign out everywhere</button></form>
 </div>
+<div class="card">
+  <div class="card-head"><h2>{{icon "devices"}} YTGuard console</h2></div>
+  <p class="muted small">Manage several kids' PCs from one page: run <code>ytguard console</code> on your own computer (Linux, Windows or Mac) and connect it to this PC with a one-time code. The console gets its own API token below, which you can revoke at any time.</p>
+  {{if .D.Fingerprint}}<p class="small">This PC's certificate: <code class="mono small">{{.D.Fingerprint}}</code></p>{{end}}
+  <form method="post" action="/security/pair"><input type="hidden" name="csrf" value="{{$csrf}}"><button class="primary">{{icon "plus"}} Connect a console</button></form>
+</div>
 <div class="card scroll">
   <div class="card-head"><h2>{{icon "home-assistant"}} API tokens</h2></div>
-  <p class="muted small">For Home Assistant and scripts. Tokens can't log into this page. <b>read</b>: status sensors · <b>control</b>: bonus time, pause, approve/deny requests · <b>admin</b>: edit filters.</p>
+  <p class="muted small">For Home Assistant, the YTGuard console and scripts. Tokens can't log into this page. <b>read</b>: status sensors · <b>control</b>: bonus time, pause, approve/deny requests · <b>admin</b>: edit filters.</p>
   <table class="list">
     <tr><th>Name</th><th>Scopes</th><th>Created</th><th>Last used</th><th></th></tr>
     {{range .D.Tokens}}

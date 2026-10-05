@@ -1,0 +1,69 @@
+{{define "content"}}
+{{$pcs := .D.PCs}}
+<div class="page-head"><div><h1>Filters</h1><p>Your own filter rules on every PC, side by side. Add a rule to several PCs at once, or copy one to the PCs that don't have it yet. Rules for one kid are matched by the kid's name.</p></div></div>
+
+<section class="card">
+  <div class="card-head"><h2>{{icon "plus"}} Add a rule</h2></div>
+  <form method="post" action="/filters/add" class="stack">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <div class="two">
+      <label>Tier <select name="tier"><option value="hide">Hide — never shown</option><option value="block">Block — shown with a lock, kid can ask</option></select></label>
+      <label>List <select name="list"><option value="deny">Deny</option><option value="allow">Allow</option></select></label>
+      <label>Type <select name="type">{{range .D.Levels}}<option value="{{.}}">{{title .}}</option>{{end}}</select></label>
+      <label>Value <input name="value" required list="filter-values" placeholder="video/channel link, @handle, keyword…"></label>
+    </div>
+    <datalist id="filter-values">
+      {{range .D.Categories}}<option value="{{.}}">category</option>{{end}}
+      <option value="shorts">attribute: Shorts</option><option value="live">attribute: live streams</option>
+      <option value="longer_than">attribute: longer than … minutes</option>
+      <option value="not_family_safe">attribute: not family safe</option><option value="not_made_for_kids">attribute: not made for kids</option>
+    </datalist>
+    <details>
+      <summary class="small">Keyword and length options</summary>
+      <div class="two" style="margin-top:.6rem">
+        <label>Keyword match <select name="match"><option value="word">Whole word</option><option value="substring">Anywhere in text</option><option value="regex">Regular expression</option></select></label>
+        <div class="field"><span>Keyword searches</span><div class="fields">{{range .D.Fields}}<label class="check"><input type="checkbox" name="field_{{.}}" {{if eq . "title"}}checked{{end}}> {{.}}</label>{{end}}</div></div>
+        <label>Minutes <small class="muted">for “longer_than”</small><input name="minutes" type="number" min="1" class="short"></label>
+      </div>
+    </details>
+    <div class="row wrap" style="align-items:flex-start;gap:1.5rem">
+      <label>For <select name="kid"><option value="all">All kids</option>{{range .D.KidNames}}<option value="{{.}}">{{.}} only</option>{{end}}</select></label>
+      <div class="field"><span>On these PCs</span>
+        <div class="fields" style="min-height:2.6rem;align-items:center">{{range $pcs}}<label class="check"><input type="checkbox" name="pc" value="{{.PC.ID}}" {{if not .Err}}checked{{else}}disabled{{end}}> {{.PC.Name}}{{if .Err}} <span class="muted small">(offline)</span>{{end}}</label>{{end}}</div>
+      </div>
+    </div>
+    <div><button class="primary">{{icon "plus"}} Add rule</button></div>
+  </form>
+</section>
+
+<section class="card">
+  <form method="get" action="/filters" class="row wrap filterbar">
+    <label>Tier <select name="tier" data-autosubmit><option value="">Both</option><option value="hide" {{if eq .D.Tier "hide"}}selected{{end}}>Hide</option><option value="block" {{if eq .D.Tier "block"}}selected{{end}}>Block</option></select></label>
+    <label>Type <select name="type" data-autosubmit><option value="">All</option>{{range .D.Levels}}<option value="{{.}}" {{if eq . $.D.Type}}selected{{end}}>{{title .}}</option>{{end}}</select></label>
+    <label class="grow">Search <input name="q" value="{{.D.Q}}" placeholder="title, channel, keyword…"></label>
+    <label class="check"><input type="checkbox" name="diff" value="1" {{if .D.Diff}}checked{{end}} data-autosubmit> Only rules missing somewhere ({{.D.Differ}})</label>
+    <button>{{icon "search"}} Show</button>
+  </form>
+</section>
+
+<section class="card scroll">
+  <div class="card-head"><h2>{{icon "filter"}} Rules <span class="pill">{{len .D.Rows}} of {{.D.Total}}</span></h2>
+    <p>✓ = the PC has the rule. Rules that come from subscribed shared lists aren't shown here — see Shared lists.</p></div>
+  {{if .D.Rows}}
+  <table class="list matrix">
+    <tr><th>Rule</th><th>For</th>{{range $pcs}}<th class="cell">{{.PC.Name}}</th>{{end}}<th></th></tr>
+    {{range .D.Rows}}{{$row := .}}
+    <tr>
+      <td><span class="tag {{if eq .Rule.Tier "hide"}}hidden{{else}}blocked{{end}}">{{.Rule.Tier}}</span> <span class="tag {{.Rule.List}}">{{.Rule.List}}</span> {{.What}}{{with .Rule.Note}}<br><span class="muted small">{{.}}</span>{{end}}</td>
+      <td class="small">{{if .Kid}}{{.Kid}}{{else}}All kids{{end}}</td>
+      {{range .Cells}}<td class="cell">{{if eq .State "yes"}}<span class="mark yes" title="Has it">{{icon "check"}}</span>{{else if eq .State "no"}}<span class="mark no" title="Doesn't have it">–</span>{{else if eq .State "nokid"}}<span class="mark na" title="No kid with that name">no kid</span>{{else}}<span class="mark na">offline</span>{{end}}</td>{{end}}
+      <td><div class="cell-actions">
+        {{if .Missing}}<form method="post" action="/filters/sync"><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="key" value="{{.Key}}"><button class="small okbtn" title="Add to the PCs that don't have it">{{icon "plus"}} Add to {{.Missing}} more</button></form>{{end}}
+        <form method="post" action="/filters/remove" data-confirm="Remove this rule from every PC that has it?"><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="key" value="{{.Key}}"><button class="small ghost" title="Remove from every PC">{{icon "trash"}} Remove{{if gt .Have 1}} from all{{end}}</button></form>
+      </div></td>
+    </tr>
+    {{end}}
+  </table>
+  {{else}}<div class="empty">{{icon "filter"}} {{if .D.Total}}No rules match.{{else}}No rules yet.{{end}}</div>{{end}}
+</section>
+{{end}}

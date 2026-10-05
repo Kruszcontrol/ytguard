@@ -1,0 +1,22 @@
+{{define "content"}}
+<div class="page-head"><div><h1>Connect a console</h1><p>Link a YTGuard console to {{if .PCName}}{{.PCName}}{{else}}this PC{{end}}.</p></div></div>
+<div class="card">
+{{if .D.Active}}
+  <ol class="steps">
+    <li>In the console, open <b>PCs → Add a PC</b> and enter this PC's address.</li>
+    <li>Check that the console shows the same certificate as here: <code class="mono">{{.D.Short}}</code></li>
+    <li>Type this code into the console:</li>
+  </ol>
+  <p class="pair-code mono" aria-label="Pairing code">{{.D.Code}}</p>
+  <p class="muted small">The code works once and expires at {{clock .D.Expires}}. It's cancelled after 5 wrong tries. When the console is connected it appears under API tokens on the Security page.</p>
+  <p class="muted small">Full certificate fingerprint: <code class="mono small">{{.D.Fingerprint}}</code></p>
+  <div class="row">
+    <a class="button" href="/security">{{icon "check"}} Done</a>
+    <form method="post" action="/security/pair/cancel"><input type="hidden" name="csrf" value="{{.CSRF}}"><button class="ghost">Cancel code</button></form>
+  </div>
+{{else}}
+  <div class="empty">{{icon "clock"}} No pairing code is active — it was used, cancelled or has expired.</div>
+  <form method="post" action="/security/pair"><input type="hidden" name="csrf" value="{{.CSRF}}"><button class="primary">{{icon "plus"}} Show a new code</button></form>
+{{end}}
+</div>
+{{end}}

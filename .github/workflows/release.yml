@@ -1,4 +1,5 @@
-# Push a tag like v1.2.0 to publish a release with Linux binaries.
+# Push a tag like v1.2.0 to publish a release with Linux binaries (and console
+# builds for Windows and macOS).
 # Tags with a suffix (v1.2.0-rc1) are published as pre-releases, which
 # installed copies don't offer as updates.
 name: release
@@ -21,12 +22,15 @@ jobs:
       - name: Build
         run: |
           mkdir dist
-          for arch in amd64 arm64; do
-            CGO_ENABLED=0 GOOS=linux GOARCH=$arch go build -trimpath \
-              -ldflags "-s -w -X ytguard.Version=${GITHUB_REF_NAME} -X ytguard.Repo=${GITHUB_REPOSITORY}" \
-              -o dist/ytguard-linux-$arch ./cmd/ytguard
+          ldflags="-s -w -X ytguard.Version=${GITHUB_REF_NAME} -X ytguard.Repo=${GITHUB_REPOSITORY}"
+          # Kid PCs (Linux), plus the console for parents' Windows and Mac computers.
+          for target in linux/amd64/ytguard-linux-amd64 linux/arm64/ytguard-linux-arm64 \
+                        windows/amd64/ytguard-windows-amd64.exe \
+                        darwin/amd64/ytguard-macos-amd64 darwin/arm64/ytguard-macos-arm64; do
+            IFS=/ read -r os arch name <<< "$target"
+            CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -trimpath -ldflags "$ldflags" -o dist/$name ./cmd/ytguard
           done
-          (cd dist && sha256sum ytguard-linux-* > SHA256SUMS && cat SHA256SUMS)
+          (cd dist && sha256sum ytguard-* > SHA256SUMS && cat SHA256SUMS)
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}

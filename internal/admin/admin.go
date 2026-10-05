@@ -27,6 +27,7 @@ import (
 	"ytguard"
 	"ytguard/internal/auth"
 	"ytguard/internal/core"
+	"ytguard/internal/pairing"
 	"ytguard/internal/rules"
 	"ytguard/internal/store"
 	"ytguard/internal/update"
@@ -54,6 +55,11 @@ type Server struct {
 	OnChange func()
 	// PCID identifies this PC to Home Assistant.
 	PCID string
+	// CertFingerprint is the SHA-256 of the admin TLS certificate (hex),
+	// which a console checks when pairing. Empty when serving plain HTTP.
+	CertFingerprint string
+
+	pair pairing.Pending
 
 	pages map[string]*template.Template
 }
@@ -100,7 +106,7 @@ func (s *Server) Handler() http.Handler {
 	static, _ := fs.Sub(staticFS, "static")
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(static))))
 	mux.HandleFunc("GET /login", s.loginPage)
-	mux.HandleFunc("GET /theme/{name}", s.setTheme)
+	mux.HandleFunc("GET /theme/{name}", ThemeHandler(true))
 	mux.HandleFunc("POST /login", s.loginPost)
 
 	page := func(pattern string, h pageHandler) { mux.Handle(pattern, s.session(h)) }
@@ -151,8 +157,12 @@ func (s *Server) Handler() http.Handler {
 	page("POST /security/sessions/revoke-all", s.sessionRevokeAll)
 	page("POST /security/tokens", s.tokenCreate)
 	page("POST /security/tokens/{id}/revoke", s.tokenRevoke)
+	page("GET /security/pair", s.pairPage)
+	page("POST /security/pair", s.pairStart)
+	page("POST /security/pair/cancel", s.pairCancel)
 
 	s.apiRoutes(mux)
+	s.consoleRoutes(mux)
 	return s.headers(mux)
 }
 
@@ -408,12 +418,12 @@ func themeOf(r *http.Request) string {
 
 // setTheme remembers the theme on this device (no login needed: it's
 // only a display preference).
-func (s *Server) setTheme(w http.ResponseWriter, r *http.Request) {
+func setTheme(w http.ResponseWriter, r *http.Request, secure bool) {
 	name := r.PathValue("name")
 	for _, t := range themes {
 		if t.ID == name {
 			http.SetCookie(w, &http.Cookie{Name: themeCookie, Value: name, Path: "/", MaxAge: 5 * 365 * 24 * 3600,
-				Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode})
+				Secure: secure, HttpOnly: true, SameSite: http.SameSiteLaxMode})
 		}
 	}
 	next := "/"
@@ -468,7 +478,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, se 
 var titles = map[string]string{
 	"login": "Log in", "dashboard": "Dashboard", "kids": "Kids", "kid": "Kid settings", "filters": "Filters",
 	"overview": "Filter overview", "lists": "Filter lists", "list": "Filter list", "tester": "Rule tester", "history": "History", "settings": "Settings",
-	"security": "Security", "token": "New API token",
+	"security": "Security", "token": "New API token", "pair": "Connect a console",
 }
 
 func (s *Server) page(w http.ResponseWriter, r *req, name string, d any) {

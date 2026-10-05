@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en" data-theme="{{.Theme}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#3554f0">
+<title>{{.Title}} · YTGuard console</title>
+<link rel="stylesheet" href="{{asset "style.css"}}">
+<link rel="manifest" href="/static/manifest.webmanifest">
+<link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+<script src="{{asset "app.js"}}" defer></script>
+</head>
+<body>
+{{if .CSRF}}
+<header class="top">
+  <div class="top-inner">
+    <a class="brand" href="/"><img src="/static/icon.svg" alt=""> YTGuard <span class="pc">Console</span></a>
+    <nav class="main-nav" aria-label="Main">
+      <a href="/" {{if eq .Active "dashboard"}}class="on"{{end}}>{{icon "home"}}<span class="label">Dashboard</span>{{if .Pending}}<span class="badge">{{.Pending}}</span>{{end}}</a>
+      <a href="/history" {{if eq .Active "history"}}class="on"{{end}}>{{icon "clock"}}<span class="label">History</span></a>
+      <a href="/filters" {{if eq .Active "filters"}}class="on"{{end}}>{{icon "filter"}}<span class="label">Filters</span></a>
+      <a href="/lists" {{if eq .Active "lists"}}class="on"{{end}}>{{icon "list"}}<span class="label">Shared lists</span></a>
+      <a href="/pcs" {{if or (eq .Active "pcs") (eq .Active "pcadd")}}class="on"{{end}}>{{icon "devices"}}<span class="label">PCs</span></a>
+      <a href="/settings" {{if eq .Active "settings"}}class="on"{{end}}>{{icon "sliders"}}<span class="label">Settings</span></a>
+    </nav>
+    <div class="top-tools">
+      {{template "themes" .}}
+      <form method="post" action="/logout" class="inline"><input type="hidden" name="csrf" value="{{.CSRF}}"><button class="icon-btn" title="Log out">{{icon "logout"}}<span class="label">Log out</span></button></form>
+    </div>
+  </div>
+</header>
+{{end}}
+<main{{if .CSRF}} data-csrf="{{.CSRF}}"{{end}}>
+{{if .Msg}}<div class="flash ok" role="status">{{icon "check"}}<div class="grow">{{.Msg}}</div></div>{{end}}
+{{if .Err}}<div class="flash err" role="alert">{{icon "alert"}}<div class="grow">{{.Err}}</div></div>{{end}}
+{{template "content" .}}
+</main>
+<footer>YTGuard console {{.Version}}{{if .Name}} · {{.Name}}{{end}}</footer>
+</body>
+</html>
+{{define "themes"}}
+<details class="menu">
+  <summary class="icon-btn" title="Theme">{{icon "palette"}}<span class="label">Theme</span></summary>
+  <div class="menu-panel" role="menu">
+    {{range .Themes}}<a href="/theme/{{.ID}}" role="menuitem" {{if eq .ID $.Theme}}class="on"{{end}}><span class="swatch" style="background:{{.Swatch}}"></span>{{.Name}}</a>{{end}}
+  </div>
+</details>
+{{end}}
+{{/* Kid status banner, shared by the dashboard. */}}
+{{define "kidbanner"}}
+{{$cls := "s-ok"}}{{$icon := "check"}}{{$txt := "Available"}}
+{{if eq .State "break"}}{{$cls = "s-warn"}}{{$icon = "coffee"}}{{$txt = printf "On a break until %s" (at .BreakUntil)}}
+{{else if eq .State "locked"}}{{$cls = "s-bad"}}{{$icon = "pause"}}{{$txt = printf "Paused until %s" (at .LockedUntil)}}
+{{else if eq .State "time_up"}}{{$cls = "s-bad"}}{{$icon = "timer"}}{{$txt = "Time's up"}}
+{{else if eq .State "outside_window"}}{{$cls = "s-muted"}}{{$icon = "clock"}}{{$txt = "Outside allowed hours"}}
+{{else if eq .State "none_today"}}{{$cls = "s-muted"}}{{$icon = "x"}}{{$txt = "No YouTube today"}}
+{{else if eq .State "watching"}}{{$cls = "s-live"}}{{$icon = "play"}}{{$txt = "Watching now"}}{{end}}
+<div class="kid-banner {{$cls}}"><div class="who"><h2>{{.Name}}</h2><span class="pc-tag">{{icon "devices"}} {{.PC.Name}}</span></div><span class="state">{{icon $icon}} {{$txt}}</span></div>
+{{end}}
