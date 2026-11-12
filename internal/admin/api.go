@@ -19,6 +19,7 @@ import (
 //	read    GET  /api/v1/state, /api/v1/requests, /api/v1/lists
 //	control POST /api/v1/kids/{kid}/bonus|lock|unlock|end-break, /api/v1/requests/{id}/approve|deny
 //	admin   GET/POST /api/v1/rules, DELETE /api/v1/rules/{id}
+//	admin   POST /api/v1/update/install   install the latest release (one-click install)
 //
 // More calls for the YTGuard console are in pair.go.
 // {kid} is a kid ID, name or Linux user.
@@ -35,6 +36,23 @@ func (s *Server) apiRoutes(mux *http.ServeMux) {
 	h("GET /api/v1/rules", auth.ScopeAdmin, s.apiRules)
 	h("POST /api/v1/rules", auth.ScopeAdmin, s.apiRuleAdd)
 	h("DELETE /api/v1/rules/{id}", auth.ScopeAdmin, s.apiRuleDelete)
+	h("POST /api/v1/update/install", auth.ScopeAdmin, s.apiUpdateInstall)
+}
+
+// apiUpdateInstall asks the root helper to install the latest release.
+// "started" is false when there was nothing newer to install.
+func (s *Server) apiUpdateInstall(w http.ResponseWriter, r *http.Request, t store.APIToken) {
+	u, err := s.App.InstallUpdate(r.Context())
+	switch {
+	case errors.Is(err, core.ErrUpToDate):
+		apiJSON(w, map[string]any{"ok": true, "started": false, "version": u.Current})
+		return
+	case err != nil:
+		apiError(w, http.StatusConflict, err.Error())
+		return
+	}
+	s.App.St.Audit("api:"+t.Name, s.clientIP(r), "update install requested", u.Current+" → "+u.Latest)
+	apiJSON(w, map[string]any{"ok": true, "started": true, "version": u.Current, "latest_version": u.Latest})
 }
 
 func (s *Server) bearer(scope string, fn apiHandler) http.Handler {
@@ -180,6 +198,11 @@ func (s *Server) apiState(w http.ResponseWriter, r *http.Request, _ store.APITok
 	if !u.Checked.IsZero() {
 		yt["update_checked"] = u.Checked.Format(time.RFC3339)
 	}
+	// One-click install: whether it's set up, and the last install's state
+	// ("requested", "running", "done", "failed" or "" for nothing recent).
+	in := s.App.Installer.Status()
+	yt["install_supported"] = s.App.Installer.Supported()
+	yt["install_state"], yt["install_message"] = in.State, in.Message
 	out["ytguard"] = yt
 	findings := s.App.ActiveFindings()
 	if findings == nil {
@@ -230,7 +253,8 @@ func (s *Server) apiKidAction(w http.ResponseWriter, r *http.Request, t store.AP
 		if minutes == 0 {
 			minutes = 15
 		}
-		err = s.App.AddBonus(k.ID, minutes, "api: "+t.Name)
+		// Negative minutes take time away; the response's "minutes" says how much was applied.
+		minutes, err = s.App.AddBonus(k.ID, minutes, "api: "+t.Name)
 	case "lock":
 		err = s.App.Lock(k.ID, time.Duration(minutes)*time.Minute)
 	case "unlock":
@@ -242,13 +266,17 @@ func (s *Server) apiKidAction(w http.ResponseWriter, r *http.Request, t store.AP
 		return
 	}
 	if err != nil {
-		apiError(w, 500, err.Error())
+		code := 500
+		if action == "bonus" {
+			code = 400
+		}
+		apiError(w, code, err.Error())
 		return
 	}
 	s.App.St.Audit("api:"+t.Name, s.clientIP(r), "kid "+action, k.Name+" "+b["minutes"])
 	s.changed()
 	st, _ := s.App.Status(k.ID)
-	apiJSON(w, map[string]any{"ok": true, "kid": k.Name, "status": st})
+	apiJSON(w, map[string]any{"ok": true, "kid": k.Name, "minutes": minutes, "status": st})
 }
 
 func (s *Server) apiRequestAction(w http.ResponseWriter, r *http.Request, t store.APIToken) {

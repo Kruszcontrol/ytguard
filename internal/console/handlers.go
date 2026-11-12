@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"ytguard/internal/auth"
+	"ytguard/internal/core"
 	"ytguard/internal/timekeeper"
 )
 
@@ -19,16 +20,19 @@ import (
 func (s *Server) dashboard(w http.ResponseWriter, r *req) {
 	snap := s.fetch(r.Context())
 	var updates, problems []PCView
-	findings := 0
+	findings, installable := 0, 0
 	for _, v := range snap.PCs {
 		if !v.Online {
 			problems = append(problems, v)
-		} else if v.State.YTGuard.UpdateAvailable {
+		} else if v.State.YTGuard.UpdateAvailable || v.Installing() || v.State.YTGuard.InstallState == "failed" {
 			updates = append(updates, v)
+		}
+		if v.CanInstall() {
+			installable++
 		}
 		findings += len(v.State.OtherApps)
 	}
-	s.page(w, r, "dashboard", map[string]any{"Snap": snap, "Updates": updates, "Problems": problems, "Findings": findings})
+	s.page(w, r, "dashboard", map[string]any{"Snap": snap, "Updates": updates, "Installable": installable, "Problems": problems, "Findings": findings})
 }
 
 // pcFrom finds the PC named in the URL.
@@ -58,19 +62,38 @@ func (s *Server) kidAction(w http.ResponseWriter, r *req) {
 		return
 	}
 	minutes, _ := strconv.Atoi(r.FormValue("minutes"))
+	if action == "bonus" {
+		if minutes, err = core.BonusFormMinutes(r.FormValue("minutes"), r.FormValue("dir")); err != nil {
+			back(w, r, "/", "", err)
+			return
+		}
+	}
 	ctx, cancel := s.actx(r)
 	defer cancel()
-	var out struct{ Kid string }
+	// Minutes is what the PC applied; PCs older than the add/remove
+	// change don't send it, so fall back to what was asked.
+	out := struct {
+		Kid     string
+		Minutes *int
+	}{}
 	err = s.call(ctx, p, "POST", fmt.Sprintf("/api/v1/kids/%d/%s", kid, action), map[string]any{"minutes": minutes}, &out)
 	who := out.Kid + " (" + p.Name + ")"
+	applied := minutes
+	if out.Minutes != nil {
+		applied = *out.Minutes
+	}
 	msg := map[string]string{
-		"bonus":     fmt.Sprintf("Gave %s %+d minutes today.", who, minutes),
+		"bonus":     core.BonusMessage(who, minutes, applied),
 		"lock":      "Paused YouTube for " + who + ".",
 		"unlock":    "Unpaused " + who + ".",
 		"end-break": "Ended " + who + "'s break.",
 	}[action]
 	if err == nil {
-		s.St.Audit("console", r.IP, "kid "+action, who+" "+r.FormValue("minutes"))
+		detail := r.FormValue("minutes")
+		if action == "bonus" {
+			detail = strconv.Itoa(minutes)
+		}
+		s.St.Audit("console", r.IP, "kid "+action, who+" "+detail)
 	}
 	back(w, r, "/", msg, err)
 }

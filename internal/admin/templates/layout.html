@@ -47,3 +47,34 @@
   </div>
 </details>
 {{end}}
+
+{{/* One-click update: banner offering the update, progress, or failure.
+     Used on the dashboard and the Settings page. */}}
+{{define "update-banner"}}
+{{if .Install.Busy}}
+<div class="flash info" data-autorefresh="10">{{icon "refresh"}}<div class="grow">
+  <b>Installing the YTGuard update…</b> This takes a minute or two. YTGuard restarts on the way, so kids may see
+  “not responding” for a few seconds. This page refreshes by itself; if it shows an error, reload it in a moment.
+</div></div>
+{{else}}
+{{if eq .Install.State "failed"}}
+<div class="flash err">{{icon "alert"}}<div class="grow">
+  <b>The update didn't install</b> ({{.Install.At.Format "Jan 2 15:04"}}): {{.Install.Message}}. YTGuard {{.Version}} is still running.
+</div></div>
+{{end}}
+{{with .Update}}{{if .Available}}
+<div class="flash info">{{icon "arrow-up"}}<div class="grow">
+  <b>YTGuard {{.Latest}} is available</b> (this PC has {{.Current}}).
+  {{if .URL}}<a href="{{.URL}}" target="_blank" rel="noopener">What's new</a>{{end}}
+  {{if not $.CanInstall}}{{if .URL}} · {{end}}To update, an adult runs <code>sudo ytguard upgrade</code> on {{$.PCName}}
+    once; after that you can install updates from here.{{end}}
+</div>
+{{if $.CanInstall}}
+<form method="post" action="/settings/install-update" data-confirm="Install YTGuard {{.Latest}} now? YTGuard restarts, so kids may see “not responding” for a few seconds.">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="small primary">{{icon "download"}} Install update</button>
+</form>
+{{end}}
+</div>
+{{end}}{{end}}
+{{end}}
+{{end}}

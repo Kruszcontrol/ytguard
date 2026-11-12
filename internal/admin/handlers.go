@@ -73,9 +73,11 @@ func (s *Server) kidAction(w http.ResponseWriter, r *req) {
 	var msg string
 	switch action {
 	case "bonus":
-		m := formInt(r, "minutes", 15)
-		err = s.App.AddBonus(id, m, "dashboard")
-		msg = fmt.Sprintf("Gave %s %+d minutes today.", k.Name, m)
+		var asked, applied int
+		if asked, err = core.BonusFormMinutes(r.FormValue("minutes"), r.FormValue("dir")); err == nil {
+			applied, err = s.App.AddBonus(id, asked, "dashboard")
+			msg = core.BonusMessage(k.Name, asked, applied)
+		}
 	case "lock":
 		m := formInt(r, "minutes", 0)
 		err = s.App.Lock(id, time.Duration(m)*time.Minute)
@@ -91,7 +93,11 @@ func (s *Server) kidAction(w http.ResponseWriter, r *req) {
 		msg = "Reset " + k.Name + "'s time for today."
 	}
 	if err == nil {
-		s.App.St.Audit("admin", r.IP, "kid "+action, k.Name+" "+r.FormValue("minutes"))
+		detail := r.FormValue("minutes")
+		if action == "bonus" && r.FormValue("dir") == "remove" {
+			detail = "-" + detail
+		}
+		s.App.St.Audit("admin", r.IP, "kid "+action, k.Name+" "+detail)
 		s.changed()
 	}
 	back(w, r, "/", msg, err)
@@ -820,10 +826,26 @@ func (s *Server) checkUpdate(w http.ResponseWriter, r *req) {
 	switch {
 	case u.Error != "":
 		back(w, r, "/settings", "", errors.New("update check failed: "+u.Error))
+	case u.Available && s.App.Installer.Supported():
+		back(w, r, "/settings", "YTGuard "+u.Latest+" is available. Press Install update to install it.", nil)
 	case u.Available:
 		back(w, r, "/settings", "YTGuard "+u.Latest+" is available. To install it, run on this PC: sudo ytguard upgrade", nil)
 	default:
 		back(w, r, "/settings", "YTGuard is up to date ("+u.Current+").", nil)
+	}
+}
+
+// installUpdate asks the root helper to install the latest release.
+func (s *Server) installUpdate(w http.ResponseWriter, r *req) {
+	u, err := s.App.InstallUpdate(r.Context())
+	switch {
+	case errors.Is(err, core.ErrUpToDate):
+		back(w, r, "/settings", "YTGuard is already up to date ("+u.Current+").", nil)
+	case err != nil:
+		back(w, r, "/settings", "", err)
+	default:
+		s.App.St.Audit("admin", r.IP, "update install requested", u.Current+" → "+u.Latest)
+		back(w, r, "/settings", "Installing YTGuard "+u.Latest+"…", nil)
 	}
 }
 

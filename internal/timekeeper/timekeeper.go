@@ -126,7 +126,8 @@ func Evaluate(st *State, sch Schedule, bonusMin int, now time.Time) Status {
 	n := now.Unix()
 	s := Status{UsedSec: st.UsedSec, LimitSec: -1, RemainingSec: -1, BreakInSec: -1}
 	if sch.DailyMinutes >= 0 {
-		s.LimitSec = (sch.DailyMinutes + bonusMin) * 60
+		// Removed time can't push the limit below zero (which would read as unlimited).
+		s.LimitSec = max(0, sch.DailyMinutes+bonusMin) * 60
 		s.RemainingSec = max(0, s.LimitSec-st.UsedSec)
 	}
 	if sch.BreakAfter > 0 && sch.BreakLen > 0 {

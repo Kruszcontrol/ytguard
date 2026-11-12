@@ -10,7 +10,7 @@ Family YouTube controls for Linux Mint (or any systemd Linux) + Google Chrome.
 - **Daily report** per kid of every video watched, plus blocked/hidden attempts, by **email** and/or **Home Assistant**.
 - **Remote web UI** on each PC (HTTPS, app password, "remember this device"), built for phones and desktops, with themes: Light, Dark, Match device, Ocean, Sunset and Forest.
 - **YTGuard console** for several PCs: one page on your own computer (Linux, Windows or Mac) with every kid, one approval queue, alerts, history, and filters and shared lists you can apply to all PCs at once. No Home Assistant needed.
-- **Home Assistant**: over MQTT, each PC and each kid appear automatically as devices (time used/left, watching now, pause switch, +time buttons, update notices). A ready-made blueprint sends approval requests to your phone with Allow/Deny buttons, for every PC. A webhook and a REST API with scoped tokens are there as an alternative.
+- **Home Assistant**: over MQTT, each PC and each kid appear automatically as devices (time used/left, watching now, pause switch, add/remove time buttons and a custom amount, update notices with an Install button). A ready-made blueprint sends approval requests to your phone with Allow/Deny buttons, for every PC. A webhook and a REST API with scoped tokens are there as an alternative.
 
 ## How it works
 
@@ -87,18 +87,23 @@ Also check for Flatpak/Snap browsers (`flatpak list`, `snap list`).
 
 ## Updating
 
-YTGuard never updates itself. Twice a day each PC asks GitHub whether a newer release exists. It sends nothing except a normal web request, and you can turn it off under Settings → Updates. When there is one:
+Twice a day each PC asks GitHub whether a newer release exists. It sends nothing except a normal web request, and you can turn it off under Settings → Updates. When there is one:
 
-- the web UI shows a banner with a link to the release notes;
-- the Home Assistant API reports `update_available`, and an `update_available` webhook event is sent once;
-- an adult installs it when convenient:
+- the web UI and the YTGuard console show a banner with a link to the release notes and an **Install update** button;
+- Home Assistant's YTGuard update entity offers **Install** (MQTT), and an `update_available` event is sent once.
+
+Updates are never installed automatically: someone presses **Install update**, or an adult runs it on the PC:
 
 ```bash
 sudo ytguard upgrade            # shows what's new, asks, downloads, verifies the checksum, installs
 sudo ytguard upgrade --check    # just check
 ```
 
+**How one-click install works.** YTGuard itself runs as an unprivileged user and can't replace itself. Pressing Install leaves a request file in `/var/lib/ytguard`; a systemd path unit (`ytguard-upgrade.path`) sees it and starts `ytguard-upgrade.service`, which runs the same upgrade as root. That service never reads what YTGuard wrote: it only installs the newest release of this GitHub repository, checked against its `SHA256SUMS`. So someone with your YTGuard login (or your Home Assistant broker) can install the latest official release, and nothing else. Progress and errors show in the web UI; details are in `journalctl -u ytguard-upgrade`. The units are set up by `ytguard install`, so a PC installed before one-click install needs one `sudo ytguard upgrade` first.
+
 An upgrade keeps everything: kids, filters, history, logins, Home Assistant tokens, the certificate and the extension ID. The service restarts (kids may see "not responding" for a few seconds). Chrome picks up the new extension within a few hours, or as soon as it's restarted. Database changes are applied automatically, after a backup to `/var/lib/ytguard/ytguard.db.backup-*`. The previous binary is kept as `/usr/local/lib/ytguard/ytguard.previous` in case you need to go back. The download is checked against the release's `SHA256SUMS`. That catches corrupted downloads, but trusts whoever controls the GitHub repository.
+
+**Publishing a release** (for whoever maintains the repository): push a version tag, e.g. `git tag v1.0.0 && git push origin v1.0.0`. GitHub Actions runs the tests, builds every binary and publishes the release; PCs see it at their next check (or press **Check for updates now**). Tags with a suffix (`v1.1.0-rc1`) become pre-releases, which PCs don't offer. Always release with a higher number than before: Chrome only updates the extension when its version goes up, and untagged builds use extension version 0.0.1.
 
 To install your own build over an existing install: `make upgrade` (or `sudo ./ytguard upgrade --file ./ytguard`).
 
@@ -106,7 +111,7 @@ To install your own build over an existing install: `make upgrade` (or `sudo ./y
 
 Open `https://<kid-pc>:8443` from your phone or computer. Accept the self-signed certificate after checking that its fingerprint matches what the installer printed. Log in and tick **Remember this device**.
 
-- **Dashboard**: each kid's time, what they're watching now, +15/+30/+60 min, pause, end break, and pending requests.
+- **Dashboard**: each kid's time, what they're watching now, +15/+30/+60 min or any amount added or removed, pause, end break, and pending requests.
 - **Filters**: tabs for **Hide** and **Block**. Each has Video / Channel / Keyword / Category / Attribute sections with Allow and Deny lists. Paste links or @handles, choose all kids or one kid, and move entries between lists and tiers. **Overview** shows every entry with its setting in both tiers.
 - **History**: per kid and day, every video watched, plus blocked and hidden attempts. One-click Hide/Block/Allow for a video or its channel. You can preview or resend the daily report.
 - **Kids**: Hide/Block defaults for unknown videos, the **Shorts** setting, comments/autoplay options, and the weekly schedule (daily minutes, allowed hours, breaks).

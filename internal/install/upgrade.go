@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"ytguard"
 	"ytguard/internal/update"
@@ -119,6 +120,35 @@ func Upgrade(ctx context.Context, o UpgradeOptions) error {
 	fmt.Printf("If something's wrong, go back with: sudo %s install --upgrade\n", backup)
 	fmt.Printf("(If the new version changed the database, restore the matching %s/ytguard.db.backup-* file too.)\n", DataDir)
 	return nil
+}
+
+// UpgradeRequested runs as root in ytguard-upgrade.service when someone
+// clicks "Install update" (see update/install.go). It never reads the
+// request file or anything else the service user can write: it only
+// installs the latest release, like "sudo ytguard upgrade -y".
+func UpgradeRequested(ctx context.Context) error {
+	if os.Geteuid() != 0 {
+		return errors.New("this runs as root from ytguard-upgrade.service; use: sudo ytguard upgrade")
+	}
+	// Remove the trigger first so the path unit doesn't start us again
+	// (if it was swapped for a symlink, only the link goes).
+	_ = os.Remove(filepath.Join(DataDir, update.RequestName))
+	from := InstalledVersion()
+	st := update.InstallStatus{State: update.InstallRunning, From: from, At: time.Now()}
+	_ = update.WriteInstallStatus(update.StatusPath, st)
+
+	err := Upgrade(ctx, UpgradeOptions{Yes: true})
+
+	st.At, st.To = time.Now(), InstalledVersion()
+	switch {
+	case err != nil:
+		st.State, st.Message = update.InstallFailed, err.Error()
+	case st.To == from:
+		st.State, st.Message = update.InstallDone, "already up to date"
+	default:
+		st.State = update.InstallDone
+	}
+	return errors.Join(err, update.WriteInstallStatus(update.StatusPath, st))
 }
 
 func orUnknown(v string) string {

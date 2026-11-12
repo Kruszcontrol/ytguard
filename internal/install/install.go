@@ -18,6 +18,7 @@ import (
 	"ytguard/internal/auth"
 	"ytguard/internal/crx"
 	"ytguard/internal/store"
+	"ytguard/internal/update"
 )
 
 // Fixed locations.
@@ -27,8 +28,12 @@ const (
 	UnitPath    = "/etc/systemd/system/ytguard.service"
 	ScanService = "/etc/systemd/system/ytguard-scan.service"
 	ScanTimer   = "/etc/systemd/system/ytguard-scan.timer"
-	ServiceUser = "ytguard"
-	ExtAddr     = "127.0.0.1:7878" // must match extension/background.js
+	// One-click install: the path unit starts the service when the web UI
+	// leaves a request in DataDir (see update/install.go).
+	UpgradeService = "/etc/systemd/system/ytguard-upgrade.service"
+	UpgradePath    = update.HelperUnit
+	ServiceUser    = "ytguard"
+	ExtAddr        = "127.0.0.1:7878" // must match extension/background.js
 
 	policyName    = "ytguard.json"
 	blocklistName = "ytguard-blocklist.json" // old separate policy file, migrated into BlocklistPath
@@ -306,13 +311,22 @@ func Install(opt Options) error {
 	if err := os.WriteFile(ScanTimer, []byte(tmr), 0o644); err != nil {
 		return err
 	}
+	usvc, upath := UpgradeUnits()
+	if err := os.WriteFile(UpgradeService, []byte(usvc), 0o644); err != nil {
+		return err
+	}
+	if err := os.WriteFile(UpgradePath, []byte(upath), 0o644); err != nil {
+		return err
+	}
+	// A request left over from before must not start an upgrade right away.
+	_ = os.Remove(filepath.Join(DataDir, update.RequestName))
 	if err := run("systemctl", "daemon-reload"); err != nil {
 		return err
 	}
 	if err := run("systemctl", "enable", "ytguard.service"); err != nil {
 		return err
 	}
-	if err := run("systemctl", "enable", "--now", "ytguard-scan.timer"); err != nil {
+	if err := run("systemctl", "enable", "--now", "ytguard-scan.timer", "ytguard-upgrade.path"); err != nil {
 		return err
 	}
 	if err := run("systemctl", "restart", "ytguard.service"); err != nil {
@@ -536,15 +550,46 @@ WantedBy=multi-user.target
 `
 }
 
+// UpgradeUnits returns ytguard-upgrade.service and ytguard-upgrade.path:
+// the root side of one-click install from the web UI, the console or Home
+// Assistant. The service only ever installs the latest official release.
+func UpgradeUnits() (service, path string) {
+	service = `[Unit]
+Description=Install the latest YTGuard release (requested from its web UI)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=` + BinPath + ` upgrade --requested
+TimeoutStartSec=15min
+PrivateTmp=yes
+`
+	path = `[Unit]
+Description=Watch for YTGuard update requests from its web UI
+
+[Path]
+PathExists=` + filepath.Join(DataDir, update.RequestName) + `
+Unit=ytguard-upgrade.service
+
+[Install]
+WantedBy=multi-user.target
+`
+	return service, path
+}
+
 // Uninstall removes the service, policy and binary. purge also deletes data.
 func Uninstall(purge bool) error {
 	if os.Geteuid() != 0 {
 		return errors.New("run with sudo")
 	}
-	_ = run("systemctl", "disable", "--now", "ytguard.service", "ytguard-scan.timer")
+	_ = run("systemctl", "disable", "--now", "ytguard.service", "ytguard-scan.timer", "ytguard-upgrade.path")
 	_ = os.Remove(UnitPath)
 	_ = os.Remove(ScanService)
 	_ = os.Remove(ScanTimer)
+	_ = os.Remove(UpgradeService)
+	_ = os.Remove(UpgradePath)
+	_ = os.RemoveAll(filepath.Dir(update.StatusPath))
 	_ = run("systemctl", "daemon-reload")
 	for _, dir := range PolicyDirs {
 		_ = os.Remove(filepath.Join(dir, policyName))

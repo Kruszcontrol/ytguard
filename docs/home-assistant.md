@@ -38,7 +38,7 @@ Under **Settings → Devices & services → MQTT** you'll find:
 |---|---|
 | Pending requests | number of "Ask a parent" requests waiting |
 | Other browsers found | browsers/video apps YTGuard found on that PC |
-| YTGuard (update) | shows in **Settings → Updates** when a new release is out (install it on the PC with `sudo ytguard upgrade`) |
+| YTGuard (update) | shows in **Settings → Updates** when a new release is out. **Install** installs it on that PC (it restarts for a few seconds). On a PC installed before one-click install, run `sudo ytguard upgrade` there once to get the button. |
 | Events | fires on approval requests, time up, other browsers found, updates, daily reports, logins |
 
 **One device per kid**, "<Kid> YouTube", linked to their PC:
@@ -52,7 +52,11 @@ Under **Settings → Devices & services → MQTT** you'll find:
 | Watching now | on while a video is playing |
 | Videos today | count |
 | Pause YouTube | switch: on = YouTube paused for the rest of the day |
-| Add 15 minutes / Add 30 minutes / End break | buttons |
+| Add 15 minutes / Add 30 minutes | buttons: give extra time today |
+| Remove 15 minutes / Remove 30 minutes | buttons: take time away today (never more than is left; unavailable if the day is unlimited) |
+| Custom time | number (1–600 min): the amount the two buttons below use; starts at 15 |
+| Add custom time / Remove custom time | buttons: add or take away the **Custom time** amount |
+| End break | button |
 
 If a PC is switched off or YTGuard stops, its entities show as unavailable.
 
@@ -80,6 +84,10 @@ entities:
   - entity: sensor.alice_youtube_time_left_today
   - entity: switch.alice_youtube_pause_youtube
   - entity: button.alice_youtube_add_15_minutes
+  - entity: button.alice_youtube_remove_15_minutes
+  - entity: number.alice_youtube_custom_time
+  - entity: button.alice_youtube_add_custom_time
+  - entity: button.alice_youtube_remove_custom_time
   - entity: button.alice_youtube_end_break
 ```
 
@@ -95,9 +103,11 @@ entities:
 | `<prefix>/<pc>/state` | YTGuard → | PC JSON: `pc`, `version`, `pending_requests`, `other_apps` |
 | `<prefix>/<pc>/kid/<id>/state` | YTGuard → | kid JSON: `used_minutes`, `remaining_minutes`, `state`, `watching`, `video_title`, `locked`, … |
 | `<prefix>/<pc>/event` | YTGuard → | `{"event_type": "approval_request", "kid": …, "approve_topic": …}` etc. |
-| `<prefix>/<pc>/kid/<id>/cmd` | → YTGuard | `bonus:15`, `lock:60` (0 = rest of today), `unlock`, `end_break` |
+| `<prefix>/<pc>/kid/<id>/cmd` | → YTGuard | `bonus:15` (add; `bonus:-15` removes), `remove:15`, `bonus_custom` / `remove_custom` (use the **Custom time** amount), `lock:60` (0 = rest of today), `unlock`, `end_break`. Amounts are 1–600 minutes. |
+| `<prefix>/<pc>/kid/<id>/custom/set` | → YTGuard | minutes for **Custom time**, `1`–`600` |
 | `<prefix>/<pc>/kid/<id>/pause/set` | → YTGuard | `ON` / `OFF` |
 | `<prefix>/<pc>/request/<id>/set` | → YTGuard | `approve_video`, `approve_channel`, `deny` |
+| `<prefix>/<pc>/update/install` | → YTGuard | `install`: install the latest release (what the update entity's **Install** sends) |
 
 Event payloads have the same fields as the webhook payloads below, plus `event_type` and `pc_id`.
 
@@ -174,7 +184,7 @@ rest:
         value_template: "{{ value_json.other_apps }}"
 
 rest_command:
-  ytguard_kidpc_bonus:
+  ytguard_kidpc_bonus:         # minutes: 1-600 adds, -1 to -600 removes
     url: "https://kidpc.local:8443/api/v1/kids/{{ kid }}/bonus"
     method: POST
     verify_ssl: false
@@ -212,7 +222,8 @@ rest_command:
       Authorization: !secret ytguard_kidpc_auth
 ```
 
-Example script call: `action: rest_command.ytguard_kidpc_bonus` with `data: {kid: Alice, minutes: 15}`.
+Example script call: `action: rest_command.ytguard_kidpc_bonus` with `data: {kid: Alice, minutes: 15}`
+(`minutes: -15` takes 15 minutes away; never more than the kid has left).
 
 ### 4. Automations
 
@@ -262,7 +273,7 @@ automation:
                   title: "YTGuard update for {{ trigger.json.pc }}"
                   message: >-
                     {{ trigger.json.latest }} is available (installed: {{ trigger.json.current }}).
-                    [Release notes]({{ trigger.json.url }}). To install, run on that PC: `sudo ytguard upgrade`
+                    [Release notes]({{ trigger.json.url }}). {{ trigger.json.how }}
           - conditions: "{{ trigger.json.type == 'unapproved_app' }}"
             sequence:
               - action: notify.mobile_app_your_phone

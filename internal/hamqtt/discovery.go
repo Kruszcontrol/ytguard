@@ -6,13 +6,14 @@ import (
 	"strings"
 
 	"ytguard"
+	"ytguard/internal/core"
 	"ytguard/internal/mqtt"
 	"ytguard/internal/store"
 )
 
 // entity is one Home Assistant MQTT discovery config.
 type entity struct {
-	component string // sensor, binary_sensor, switch, button, update, event
+	component string // sensor, binary_sensor, switch, button, number, update, event
 	objectID  string // unique within this PC
 	config    map[string]any
 }
@@ -92,8 +93,7 @@ func (b *Bridge) entities(base string) ([]entity, string) {
 			"state_topic": base + "/state", "value_template": "{{ value_json.pending_requests }}", "state_class": "measurement"}),
 		ent("sensor", "other_apps", pcDevice, map[string]any{"name": "Other browsers found", "icon": "mdi:web-cancel",
 			"state_topic": base + "/state", "value_template": "{{ value_json.other_apps }}", "state_class": "measurement"}),
-		ent("update", "update", pcDevice, map[string]any{"name": "YTGuard", "state_topic": base + "/update",
-			"entity_category": "diagnostic"}),
+		ent("update", "update", pcDevice, b.updateConfig(base)),
 		ent("event", "events", pcDevice, map[string]any{"name": "Events", "state_topic": base + "/event",
 			"event_types": EventTypes, "icon": "mdi:bell-ring"}),
 	}
@@ -146,11 +146,36 @@ func (b *Bridge) entities(base string) ([]entity, string) {
 				"command_topic": kb + "/cmd", "payload_press": "bonus:15"}),
 			ent("button", obj("bonus30"), dev, map[string]any{"name": "Add 30 minutes", "icon": "mdi:timer-plus",
 				"command_topic": kb + "/cmd", "payload_press": "bonus:30"}),
+			ent("button", obj("remove15"), dev, map[string]any{"name": "Remove 15 minutes", "icon": "mdi:timer-minus-outline",
+				"command_topic": kb + "/cmd", "payload_press": "remove:15",
+				"availability": availWhen("limit_minutes"), "availability_mode": "all"}),
+			ent("button", obj("remove30"), dev, map[string]any{"name": "Remove 30 minutes", "icon": "mdi:timer-minus",
+				"command_topic": kb + "/cmd", "payload_press": "remove:30",
+				"availability": availWhen("limit_minutes"), "availability_mode": "all"}),
+			ent("number", obj("custom_minutes"), dev, map[string]any{"name": "Custom time", "icon": "mdi:timer-edit-outline",
+				"state_topic": state, "value_template": "{{ value_json.custom_minutes }}", "command_topic": kb + "/custom/set",
+				"min": 1, "max": core.MaxBonusMinutes, "step": 1, "mode": "box", "unit_of_measurement": "min"}),
+			ent("button", obj("bonus_custom"), dev, map[string]any{"name": "Add custom time", "icon": "mdi:timer-plus-outline",
+				"command_topic": kb + "/cmd", "payload_press": "bonus_custom"}),
+			ent("button", obj("remove_custom"), dev, map[string]any{"name": "Remove custom time", "icon": "mdi:timer-minus-outline",
+				"command_topic": kb + "/cmd", "payload_press": "remove_custom",
+				"availability": availWhen("limit_minutes"), "availability_mode": "all"}),
 			ent("button", obj("end_break"), dev, map[string]any{"name": "End break", "icon": "mdi:coffee-off",
 				"command_topic": kb + "/cmd", "payload_press": "end_break"}),
 		)
 	}
 	return out, kidKey(kids)
+}
+
+// updateConfig is the update entity. With one-click install set up on the
+// PC, Home Assistant shows an Install button that publishes to
+// base/update/install.
+func (b *Bridge) updateConfig(base string) map[string]any {
+	cfg := map[string]any{"name": "YTGuard", "state_topic": base + "/update", "entity_category": "diagnostic"}
+	if b.App.Installer.Supported() {
+		cfg["command_topic"], cfg["payload_install"] = base+"/update/install", "install"
+	}
+	return cfg
 }
 
 func kidKey(kids []store.Kid) string {

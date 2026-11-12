@@ -263,11 +263,20 @@ func TestConsole(t *testing.T) {
 	}
 
 	// Bonus time for Bob.
-	if _, body := c.post(fmt.Sprintf("/pcs/%s/kids/%d/bonus", idOf(pc2), pc2.kid.ID), url.Values{"minutes": {"30"}}); !strings.Contains(body, "Gave Bob (Bedroom PC) +30 minutes") {
+	if _, body := c.post(fmt.Sprintf("/pcs/%s/kids/%d/bonus", idOf(pc2), pc2.kid.ID), url.Values{"minutes": {"30"}}); !strings.Contains(body, "Gave Bob (Bedroom PC) 30 more minutes today") {
 		t.Fatalf("bonus: %s", body)
 	}
 	if n, _ := pc2.st.BonusMinutes(pc2.kid.ID, timekeeper.Day(time.Now())); n != 30 {
 		t.Fatalf("bonus minutes %d", n)
+	}
+	if _, body := c.post(fmt.Sprintf("/pcs/%s/kids/%d/bonus", idOf(pc2), pc2.kid.ID), url.Values{"minutes": {"12"}, "dir": {"remove"}}); !strings.Contains(body, "Took 12 minutes off Bob (Bedroom PC)'s time today.") {
+		t.Fatalf("remove: %s", body)
+	}
+	if n, _ := pc2.st.BonusMinutes(pc2.kid.ID, timekeeper.Day(time.Now())); n != 18 {
+		t.Fatalf("bonus minutes after remove %d", n)
+	}
+	if _, body := c.post(fmt.Sprintf("/pcs/%s/kids/%d/bonus", idOf(pc2), pc2.kid.ID), url.Values{"minutes": {"lots"}}); !strings.Contains(body, "err=") {
+		t.Fatalf("bad minutes accepted: %s", body)
 	}
 
 	// History.

@@ -124,15 +124,21 @@
 
 <section class="card" id="updates">
   <div class="card-head"><h2>{{icon "arrow-up"}} Updates</h2></div>
+  {{template "update-banner" $}}
+  {{if and (eq $.Install.State "done") (not $.Install.Message)}}<div class="flash ok">{{icon "check"}}<div class="grow">
+    Updated {{$.Install.From}} → {{$.Install.To}} ({{$.Install.At.Format "Jan 2 15:04"}}). Kids' Chrome picks up the new extension within a few hours,
+    or right away after quitting and reopening Chrome.</div></div>{{end}}
   {{with $.Update}}
   <label class="switch"><input type="checkbox" name="update_check" {{if $s.UpdateCheck}}checked{{end}}> Check GitHub{{if .Repo}} (<code>{{.Repo}}</code>){{end}} for new versions twice a day</label>
   <p class="small" style="margin-bottom:0">This PC runs <b>{{.Current}}</b>.
     {{if not .Repo}}<span class="muted">This build doesn't know its GitHub repository, so it can't check.</span>
     {{else if .Error}}<span class="pill bad">{{icon "alert"}} last check failed</span> <span class="muted">{{.Error}}</span>
-    {{else if .Available}}<span class="pill warn">{{icon "arrow-up"}} {{.Latest}} available</span>{{if .URL}} <a href="{{.URL}}" target="_blank" rel="noopener">release notes</a>{{end}} — an adult runs <code>sudo ytguard upgrade</code> on this PC.
+    {{else if .Available}}<span class="pill warn">{{icon "arrow-up"}} {{.Latest}} available</span>{{if .URL}} <a href="{{.URL}}" target="_blank" rel="noopener">release notes</a>{{end}}
     {{else if .Latest}}<span class="pill ok">{{icon "check"}} up to date</span>{{end}}
     {{if not .Checked.IsZero}}<span class="muted">Checked {{.Checked.Format "Jan 2 15:04"}}.</span>{{end}}</p>
-  <p class="muted small">Updates are never installed automatically. Only the version number is sent to GitHub, nothing about your family.</p>
+  <p class="muted small">Updates are never installed automatically. Only the version number is sent to GitHub, nothing about your family.
+    {{if $.CanInstall}}<b>Install update</b> (here, in the YTGuard console or in Home Assistant) installs the newest official release, after checking its checksum.
+    {{else}}One-click install is set up by the next <code>sudo ytguard upgrade</code> on this PC.{{end}}</p>
   {{end}}
 </section>
 

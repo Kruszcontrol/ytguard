@@ -155,6 +155,34 @@ func TestCSRFAndActions(t *testing.T) {
 	if st, _ := e.app.Status(e.kid.ID); st.LimitSec != (60+30)*60 {
 		t.Fatalf("limit = %d", st.LimitSec)
 	}
+	// Custom amounts: take some away, then more than is left (capped).
+	if _, loc := e.post("/kids/1/bonus", url.Values{"csrf": {csrf}, "minutes": {"25"}, "dir": {"remove"}}); !strings.Contains(loc, "msg=") {
+		t.Fatalf("remove: %s", loc)
+	}
+	if st, _ := e.app.Status(e.kid.ID); st.LimitSec != (60+30-25)*60 {
+		t.Fatalf("limit after remove = %d", st.LimitSec)
+	}
+	if _, loc := e.post("/kids/1/bonus", url.Values{"csrf": {csrf}, "minutes": {"500"}, "dir": {"remove"}}); !strings.Contains(loc, "msg=") {
+		t.Fatalf("remove all: %s", loc)
+	}
+	if st, _ := e.app.Status(e.kid.ID); st.LimitSec != 0 || st.Allowed {
+		t.Fatalf("after removing all: %+v", st)
+	}
+	// Nothing left to remove; bad amounts are rejected.
+	for _, f := range []url.Values{
+		{"minutes": {"5"}, "dir": {"remove"}},
+		{"minutes": {"0"}}, {"minutes": {"abc"}}, {"minutes": {"601"}}, {"minutes": {"-5"}},
+	} {
+		f.Set("csrf", csrf)
+		if _, loc := e.post("/kids/1/bonus", f); !strings.Contains(loc, "err=") {
+			t.Fatalf("%v accepted: %s", f, loc)
+		}
+	}
+	// An add after removing everything counts in full.
+	e.post("/kids/1/bonus", url.Values{"csrf": {csrf}, "minutes": {"7"}, "dir": {"add"}})
+	if st, _ := e.app.Status(e.kid.ID); st.LimitSec != 7*60 || !st.Allowed {
+		t.Fatalf("add after remove: %+v", st)
+	}
 	// Bad regex is rejected.
 	_, loc = e.post("/filters/add", url.Values{"csrf": {csrf}, "tier": {"hide"}, "list": {"deny"}, "type": {"keyword"}, "value": {"("}, "match": {"regex"}})
 	if !strings.Contains(loc, "err=") {

@@ -120,6 +120,6 @@ actions:
             message: >-
               {% if e.event_type == 'time_up' %}Used {{ e.used_minutes }} min on {{ e.pc }}.
               {% elif e.event_type == 'unapproved_app' %}{{ e.message }}
-              {% elif e.event_type == 'update_available' %}{{ e.pc }} has {{ e.current }}. To update, run on that PC: sudo ytguard upgrade
+              {% elif e.event_type == 'update_available' %}{{ e.pc }} has {{ e.current }}. {{ e.how | default('To update, run on that PC: sudo ytguard upgrade') }}
               {% elif e.event_type == 'daily_report' %}{{ e.summary }}
               {% else %}{{ e.summary }}{% endif %}

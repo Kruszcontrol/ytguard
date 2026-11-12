@@ -57,3 +57,17 @@ func TestExtensionSettingsValid(t *testing.T) {
 		}
 	}
 }
+
+func TestUpgradeUnits(t *testing.T) {
+	svc, path := UpgradeUnits()
+	if !strings.Contains(svc, "ExecStart="+BinPath+" upgrade --requested\n") || !strings.Contains(svc, "Type=oneshot") {
+		t.Fatalf("service:\n%s", svc)
+	}
+	// The daemon can only write in DataDir, so that's where the request goes.
+	if !strings.Contains(path, "PathExists="+DataDir+"/upgrade.request\n") || !strings.Contains(path, "Unit=ytguard-upgrade.service") {
+		t.Fatalf("path unit:\n%s", path)
+	}
+	if UpgradePath != "/etc/systemd/system/ytguard-upgrade.path" {
+		t.Fatalf("helper unit at %s", UpgradePath)
+	}
+}

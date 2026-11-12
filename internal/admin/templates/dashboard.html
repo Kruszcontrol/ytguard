@@ -6,12 +6,7 @@
   </div>
 </div>
 
-{{with .Update}}{{if .Available}}
-<div class="flash info">{{icon "arrow-up"}}<div class="grow">
-  <b>YTGuard {{.Latest}} is available</b> (this PC has {{.Current}}).
-  {{if .URL}}<a href="{{.URL}}" target="_blank" rel="noopener">What's new</a> · {{end}}To update, an adult runs <code>sudo ytguard upgrade</code> on {{$.PCName}}.
-</div></div>
-{{end}}{{end}}
+{{template "update-banner" .}}
 {{range .D.Warnings}}<div class="flash warn">{{icon "info"}}<div class="grow">{{.}}</div></div>{{end}}
 
 {{if .D.Pending}}
@@ -99,6 +94,13 @@
         <form method="post" action="/kids/{{$k.ID}}/bonus"><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="minutes" value="{{$m}}"><button class="small">{{icon "plus"}}{{$m}} min</button></form>
         {{end}}
       </span>
+        <form method="post" action="/kids/{{$k.ID}}/bonus"><input type="hidden" name="csrf" value="{{$.CSRF}}">
+          <span class="time-adjust" role="group" aria-label="Add or remove a custom amount of time">
+            <input type="number" name="minutes" min="1" max="600" step="1" inputmode="numeric" placeholder="min" required aria-label="Minutes">
+            <button class="small" name="dir" value="add" title="Add these minutes to today">{{icon "plus"}}Add</button>
+            <button class="small" name="dir" value="remove" title="Take these minutes off today">{{icon "minus"}}Remove</button>
+          </span>
+        </form>
       {{if eq $s.Reason "locked"}}
       <form method="post" action="/kids/{{$k.ID}}/unlock"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="small okbtn">{{icon "play"}} Unpause</button></form>
       {{else}}

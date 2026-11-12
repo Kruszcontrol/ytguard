@@ -47,6 +47,16 @@ func TestBonus(t *testing.T) {
 	}
 }
 
+func TestNegativeBonusNeverUnlimited(t *testing.T) {
+	st := &State{Day: Day(base)}
+	sch := Schedule{DailyMinutes: 30}
+	Roll(st, sch, base)
+	s := Evaluate(st, sch, -90, base)
+	if s.Allowed || s.LimitSec != 0 {
+		t.Fatalf("over-removed time should mean none left: %+v", s)
+	}
+}
+
 func TestMultiTabCountedOnce(t *testing.T) {
 	st := &State{}
 	sch := Schedule{DailyMinutes: -1}

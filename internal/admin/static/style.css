@@ -306,6 +306,8 @@ form.inline { display: inline; }
 .flash.warn { background: var(--warn-soft); border-color: var(--warn); }
 .flash.info { background: var(--info-soft); border-color: var(--accent); }
 .flash .grow { min-width: 0; }
+.flash > form { flex: none; align-self: center; }
+form.update-all { margin: -.4rem 0 1rem; }
 .pill {
   display: inline-flex; align-items: center; gap: .3rem; font-size: .8rem; font-weight: 650; padding: .2rem .65rem;
   border-radius: 99px; background: var(--surface-3); color: var(--muted); white-space: nowrap;
@@ -344,6 +346,12 @@ form.inline { display: inline; }
 .stat span { font-size: .76rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; font-weight: 650; }
 .kid-actions { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: auto; padding-top: .3rem; }
 .kid-actions form { display: contents; }
+/* custom add/remove time: [ min ][+ Add][- Remove] joined into one control */
+.time-adjust { display: inline-flex; align-items: stretch; }
+.time-adjust input { width: 4.6rem; padding: .3rem .5rem; font-size: .84rem; border-radius: 8px 0 0 8px; }
+.time-adjust button { border-radius: 0; margin-left: -1px; }
+.time-adjust button:last-child { border-radius: 0 8px 8px 0; }
+.time-adjust input:focus, .time-adjust button:hover { position: relative; z-index: 1; }
 
 .video { display: flex; gap: .8rem; align-items: center; text-decoration: none; color: var(--text); min-width: 0; }
 .video:hover { color: var(--text); }

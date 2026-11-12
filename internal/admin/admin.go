@@ -147,6 +147,7 @@ func (s *Server) Handler() http.Handler {
 	page("POST /settings/test-email", s.testEmail)
 	page("POST /settings/test-ha", s.testHA)
 	page("POST /settings/check-update", s.checkUpdate)
+	page("POST /settings/install-update", s.installUpdate)
 	page("POST /settings/cleanup", s.cleanupNow)
 	page("GET /export", s.export)
 	page("POST /import", s.importRules)
@@ -450,7 +451,10 @@ type pageData struct {
 	Kids    []store.Kid
 	Pending int // approval requests waiting (nav badge)
 	Update  update.Status
-	D       any
+	// One-click install (see update/install.go).
+	Install    update.InstallStatus
+	CanInstall bool
+	D          any
 }
 
 func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, se *store.Session, d any) {
@@ -465,6 +469,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, se 
 		Msg: r.URL.Query().Get("msg"), Err: r.URL.Query().Get("err")}
 	if se != nil {
 		pd.CSRF = se.CSRF
+		pd.Install, pd.CanInstall = s.App.Installer.Status(), s.App.Installer.Supported()
 		if rs, err := s.App.St.Requests(store.RequestPending, 100); err == nil {
 			pd.Pending = len(rs)
 		}

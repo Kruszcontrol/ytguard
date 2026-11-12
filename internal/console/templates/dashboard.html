@@ -17,8 +17,26 @@
 {{range .D.Problems}}
 <div class="flash {{if .CertChanged}}err{{else}}warn{{end}}">{{icon "alert"}}<div class="grow"><b>{{.Name}}</b>: {{.Err}} <a href="/pcs">Details</a></div></div>
 {{end}}
-{{range .D.Updates}}
-<div class="flash info">{{icon "arrow-up"}}<div class="grow"><b>{{.Name}}</b> can be updated to YTGuard {{.State.YTGuard.Latest}} (has {{.State.YTGuard.Version}}){{with .State.YTGuard.ReleaseURL}} · <a href="{{.}}" target="_blank" rel="noopener">What's new</a>{{end}}. An adult runs <code>sudo ytguard upgrade</code> on it.</div></div>
+{{range .D.Updates}}{{$y := .State.YTGuard}}
+{{if .Installing}}
+<div class="flash info">{{icon "refresh"}}<div class="grow"><b>{{.Name}}</b> is installing YTGuard {{$y.Latest}}… It restarts on the way; this page updates by itself.</div></div>
+{{else}}
+{{if eq $y.InstallState "failed"}}
+<div class="flash err">{{icon "alert"}}<div class="grow">The update on <b>{{.Name}}</b> didn't install: {{$y.InstallMessage}}. It's still running YTGuard {{$y.Version}}.</div></div>
+{{end}}
+{{if $y.UpdateAvailable}}
+<div class="flash info">{{icon "arrow-up"}}<div class="grow"><b>{{.Name}}</b> can be updated to YTGuard {{$y.Latest}} (has {{$y.Version}}){{with $y.ReleaseURL}} · <a href="{{.}}" target="_blank" rel="noopener">What's new</a>{{end}}.
+  {{if not $y.InstallSupported}}An adult runs <code>sudo ytguard upgrade</code> on it once; after that you can install updates from here.{{end}}</div>
+  {{if .CanInstall}}<form method="post" action="/pcs/{{.ID}}/update" data-confirm="Install YTGuard {{$y.Latest}} on {{.Name}} now? It restarts, so kids may see “not responding” for a few seconds.">
+    <input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="small primary">{{icon "download"}} Install</button></form>{{end}}
+</div>
+{{end}}
+{{end}}
+{{end}}
+{{if gt .D.Installable 1}}
+<form method="post" action="/updates/install" class="update-all" data-confirm="Install the update on all {{.D.Installable}} PCs now? Each restarts, so kids may see “not responding” for a few seconds.">
+  <input type="hidden" name="csrf" value="{{.CSRF}}"><button class="small">{{icon "download"}} Install the update on all {{.D.Installable}} PCs</button>
+</form>
 {{end}}
 
 {{if $snap.Requests}}
@@ -100,6 +118,13 @@
         <form method="post" action="{{$base}}/bonus"><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="minutes" value="{{$m}}"><button class="small">{{icon "plus"}}{{$m}} min</button></form>
         {{end}}
       </span>
+        <form method="post" action="{{$base}}/bonus"><input type="hidden" name="csrf" value="{{$.CSRF}}">
+          <span class="time-adjust" role="group" aria-label="Add or remove a custom amount of time">
+            <input type="number" name="minutes" min="1" max="600" step="1" inputmode="numeric" placeholder="min" required aria-label="Minutes">
+            <button class="small" name="dir" value="add" title="Add these minutes to today">{{icon "plus"}}Add</button>
+            <button class="small" name="dir" value="remove" title="Take these minutes off today">{{icon "minus"}}Remove</button>
+          </span>
+        </form>
       {{if eq .State "locked"}}
       <form method="post" action="{{$base}}/unlock"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="small okbtn">{{icon "play"}} Unpause</button></form>
       {{else}}

@@ -59,6 +59,10 @@ type pcState struct {
 		Latest          string `json:"latest_version"`
 		UpdateAvailable bool   `json:"update_available"`
 		ReleaseURL      string `json:"release_url"`
+		// One-click install (PCs older than it leave these empty).
+		InstallSupported bool   `json:"install_supported"`
+		InstallState     string `json:"install_state"` // requested | running | done | failed | ""
+		InstallMessage   string `json:"install_message"`
 	} `json:"ytguard"`
 }
 
@@ -86,6 +90,18 @@ type PCView struct {
 	CertChanged string // the new fingerprint, if the certificate changed
 	State       pcState
 	Requests    []Request
+}
+
+// Installing reports whether the PC is installing an update right now.
+func (v PCView) Installing() bool {
+	st := v.State.YTGuard.InstallState
+	return v.Online && (st == "requested" || st == "running")
+}
+
+// CanInstall reports whether the console can install an update on the PC.
+func (v PCView) CanInstall() bool {
+	y := v.State.YTGuard
+	return v.Online && y.UpdateAvailable && y.InstallSupported && !v.Installing()
 }
 
 // Status is a short word for the PC's connection state.

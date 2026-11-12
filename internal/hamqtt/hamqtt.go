@@ -1,6 +1,7 @@
 // Package hamqtt connects YTGuard to Home Assistant through an MQTT broker
 // using MQTT discovery: each PC appears as a device, each kid as a device
-// under it, with sensors, a pause switch, bonus-time buttons, an update
+// under it, with sensors, a pause switch, add/remove-time buttons and a
+// custom-time number, an update
 // entity and an event entity. Commands (buttons, approvals) come back over
 // MQTT, so one Home Assistant automation works for every PC.
 //
@@ -9,9 +10,12 @@
 //	base/status                 online | offline (retained, last will)
 //	base/state                  PC state JSON (retained)
 //	base/update                 version info for the HA update entity (retained)
+//	base/update/install         <- install (one-click install of the latest release)
 //	base/event                  events: {"event_type": ..., ...}
 //	base/kid/<id>/state         kid state JSON (retained)
-//	base/kid/<id>/cmd           <- bonus:<min> | end_break | lock:<min> | unlock
+//	base/kid/<id>/cmd           <- bonus:<min> (negative removes) | remove:<min> |
+//	                               bonus_custom | remove_custom | end_break | lock:<min> | unlock
+//	base/kid/<id>/custom/set    <- minutes for the custom add/remove buttons (1-600)
 //	base/kid/<id>/pause/set     <- ON | OFF
 //	base/request/<id>/set       <- approve_video | approve_channel | deny
 //
@@ -189,8 +193,8 @@ func (b *Bridge) session(ctx context.Context, s store.Settings) error {
 	}()
 	slog.Info("mqtt connected", "broker", opts.Addr, "base", base)
 
-	if err := c.Subscribe(base+"/kid/+/cmd", base+"/kid/+/pause/set", base+"/kid/+/limits/set", base+"/kid/+/breaks/set",
-		base+"/request/+/set", s.MQTTDiscovery+"/status"); err != nil {
+	if err := c.Subscribe(base+"/kid/+/cmd", base+"/kid/+/pause/set", base+"/kid/+/limits/set", base+"/kid/+/breaks/set", base+"/kid/+/custom/set",
+		base+"/request/+/set", base+"/update/install", s.MQTTDiscovery+"/status"); err != nil {
 		c.Close()
 		return err
 	}
@@ -260,6 +264,7 @@ type kidState struct {
 	PendingRequests  int    `json:"pending_requests"`
 	TimeLimits       bool   `json:"time_limits"` // enforcement switches
 	Breaks           bool   `json:"breaks"`
+	CustomMinutes    int    `json:"custom_minutes"` // for the custom add/remove buttons
 }
 
 func minutes(sec int) *int {
@@ -275,13 +280,14 @@ func (b *Bridge) publishState(c *mqtt.Client, base string) error {
 	if err != nil {
 		return nil // database hiccup: try again next tick
 	}
+	custom := b.customMinutesAll()
 	pending := 0
 	for _, ks := range states {
 		st := ks.Status
 		k := kidState{UsedMinutes: st.UsedSec / 60, RemainingMinutes: minutes(st.RemainingSec), LimitMinutes: minutes(st.LimitSec),
 			BreakInMinutes: minutes(st.BreakInSec), Allowed: st.Allowed, Locked: st.Reason == "locked", Message: st.Message,
 			TodayVideos: ks.TodayVideos, PendingRequests: ks.Pending, Watching: ks.WatchingNow && st.Allowed,
-			TimeLimits: !ks.Kid.Options.TimeLimitsOff, Breaks: !ks.Kid.Options.BreaksOff}
+			TimeLimits: !ks.Kid.Options.TimeLimitsOff, Breaks: !ks.Kid.Options.BreaksOff, CustomMinutes: customFor(custom, ks.Kid.ID)}
 		switch {
 		case st.Reason != "":
 			k.State = st.Reason
@@ -305,7 +311,8 @@ func (b *Bridge) publishState(c *mqtt.Client, base string) error {
 		latest = ytguard.Version
 	}
 	if err := b.publishChanged(c, base+"/update", map[string]any{"installed_version": ytguard.Version, "latest_version": latest,
-		"title": "YTGuard", "release_url": u.URL, "release_summary": truncate(u.Notes, 250)}); err != nil {
+		"title": "YTGuard", "release_url": u.URL, "release_summary": truncate(u.Notes, 250),
+		"in_progress": b.App.Installer.Status().Busy()}); err != nil {
 		return err
 	}
 	s, _ := b.App.St.Settings()
@@ -375,10 +382,24 @@ func (b *Bridge) handle(base, disc string, m mqtt.Message) {
 			cmd = "lock:0"
 		}
 		what, err = b.kidCommand(parts[1], cmd)
+	case len(parts) == 4 && parts[0] == "kid" && parts[2] == "custom" && parts[3] == "set":
+		what, err = b.setCustomMinutes(parts[1], payload)
 	case len(parts) == 4 && parts[0] == "kid" && (parts[2] == "limits" || parts[2] == "breaks") && parts[3] == "set":
 		what, err = b.kidSwitch(parts[1], parts[2], strings.EqualFold(payload, "ON"))
 	case len(parts) == 3 && parts[0] == "request" && parts[2] == "set":
 		what, err = b.requestCommand(parts[1], payload)
+	case len(parts) == 2 && parts[0] == "update" && parts[1] == "install" && payload == "install":
+		// Checking GitHub can take a while; don't hold up the MQTT connection.
+		go func() {
+			what, err := b.installUpdate()
+			if err != nil {
+				slog.Warn("mqtt update install", "err", err)
+				return
+			}
+			b.App.St.Audit("mqtt", "broker", what, payload)
+			b.Kick()
+		}()
+		return
 	default:
 		return
 	}
@@ -402,11 +423,26 @@ func (b *Bridge) kidCommand(idStr, cmd string) (string, error) {
 	verb, arg, _ := strings.Cut(cmd, ":")
 	n, _ := strconv.Atoi(arg)
 	switch verb {
-	case "bonus":
-		if n <= 0 || n > 600 {
-			return "", errors.New("bonus minutes must be 1-600")
+	case "bonus", "remove", "bonus_custom", "remove_custom":
+		switch verb {
+		case "bonus_custom":
+			n = customFor(b.customMinutesAll(), id)
+		case "remove_custom":
+			n = -customFor(b.customMinutesAll(), id)
+		case "remove":
+			if n <= 0 { // "remove:-5" would add; refuse it
+				return "", errors.New("remove minutes must be 1-600")
+			}
+			n = -n
 		}
-		return "kid bonus " + k.Name, b.App.AddBonus(id, n, "home assistant")
+		applied, err := b.App.AddBonus(id, n, "home assistant")
+		if err != nil {
+			return "", err
+		}
+		if applied < 0 {
+			return fmt.Sprintf("kid time removed %s %d min", k.Name, -applied), nil
+		}
+		return fmt.Sprintf("kid bonus %s %d min", k.Name, applied), nil
 	case "lock":
 		if n < 0 || n > 1440 {
 			return "", errors.New("lock minutes must be 0-1440")
@@ -418,6 +454,45 @@ func (b *Bridge) kidCommand(idStr, cmd string) (string, error) {
 		return "kid end break " + k.Name, b.App.Unlock(id, true)
 	}
 	return "", fmt.Errorf("unknown command %q", cmd)
+}
+
+// customMinutesKey stores each kid's "Custom time" number (kid ID -> minutes).
+const customMinutesKey = "mqtt_custom_minutes"
+
+// defaultCustomMinutes is the custom amount until it's changed in Home Assistant.
+const defaultCustomMinutes = 15
+
+func (b *Bridge) customMinutesAll() map[string]int {
+	m := map[string]int{}
+	_, _ = b.App.St.GetJSON(customMinutesKey, &m)
+	return m
+}
+
+func customFor(m map[string]int, kidID int64) int {
+	if n := m[strconv.FormatInt(kidID, 10)]; n > 0 {
+		return n
+	}
+	return defaultCustomMinutes
+}
+
+// setCustomMinutes saves the amount the custom add/remove buttons use.
+func (b *Bridge) setCustomMinutes(idStr, payload string) (string, error) {
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		return "", errors.New("bad kid id")
+	}
+	k, err := b.App.St.Kid(id)
+	if err != nil {
+		return "", err
+	}
+	f, err := strconv.ParseFloat(payload, 64) // HA may send "20.0"
+	n := int(f)
+	if err != nil || float64(n) != f || n < 1 || n > core.MaxBonusMinutes {
+		return "", fmt.Errorf("custom minutes must be a whole number 1-%d", core.MaxBonusMinutes)
+	}
+	m := b.customMinutesAll()
+	m[idStr] = n
+	return fmt.Sprintf("kid custom time %s %d min", k.Name, n), b.App.St.SetJSON(customMinutesKey, m)
 }
 
 // kidSwitch turns a kid's time limits or breaks enforcement on or off.
@@ -455,6 +530,20 @@ func (b *Bridge) requestCommand(idStr, cmd string) (string, error) {
 		return "", fmt.Errorf("unknown request command %q", cmd)
 	}
 	return "request " + cmd + ": " + r.Title, err
+}
+
+// installUpdate is Home Assistant's Install button on the update entity.
+func (b *Bridge) installUpdate() (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	u, err := b.App.InstallUpdate(ctx)
+	if errors.Is(err, core.ErrUpToDate) {
+		return "update install: already up to date", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return "update install requested: " + u.Current + " → " + u.Latest, nil
 }
 
 func truncate(s string, n int) string {

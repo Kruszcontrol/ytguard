@@ -25,7 +25,7 @@ func TestEntitiesUniquePerPC(t *testing.T) {
 	b, _ := newBridge(t, "pcbbbbbbbbbb")
 	ea, _ := a.entities("ytguard/pcaaaaaaaaaa")
 	eb, _ := b.entities("ytguard/pcbbbbbbbbbb")
-	if len(ea) != 4+13 {
+	if len(ea) != 4+18 {
 		t.Fatalf("entities: %d", len(ea))
 	}
 	ids := map[string]bool{}
@@ -73,6 +73,30 @@ func TestKidsChangedAndCommands(t *testing.T) {
 	st, _ := b.App.Status(k.ID)
 	if st.Reason == "locked" || st.LimitSec != st0.LimitSec+15*60 {
 		t.Fatalf("after commands: %+v (before %+v)", st, st0)
+	}
+	// Remove time, by command and with the custom amount.
+	send("/kid/1/cmd", "remove:10", false)
+	send("/kid/1/cmd", "bonus:-2", false)
+	send("/kid/1/cmd", "remove:-5", false) // would add: ignored
+	if st, _ := b.App.Status(k.ID); st.LimitSec != st0.LimitSec+(15-10-2)*60 {
+		t.Fatalf("after remove: %d (before %d)", st.LimitSec, st0.LimitSec)
+	}
+	if got := customFor(b.customMinutesAll(), k.ID); got != defaultCustomMinutes {
+		t.Fatalf("default custom = %d", got)
+	}
+	send("/kid/1/custom/set", "20.0", false)
+	send("/kid/1/custom/set", "601", false) // out of range: ignored
+	send("/kid/1/custom/set", "7.5", false) // not whole: ignored
+	send("/kid/1/custom/set", "abc", false) // ignored
+	send("/kid/1/custom/set", "999", true)  // retained: ignored
+	if got := customFor(b.customMinutesAll(), k.ID); got != 20 {
+		t.Fatalf("custom = %d", got)
+	}
+	send("/kid/1/cmd", "bonus_custom", false)
+	send("/kid/1/cmd", "bonus_custom", false)
+	send("/kid/1/cmd", "remove_custom", false)
+	if st, _ := b.App.Status(k.ID); st.LimitSec != st0.LimitSec+(3+20)*60 {
+		t.Fatalf("after custom: %d (before %d)", st.LimitSec, st0.LimitSec)
 	}
 	// Enforcement switches.
 	send("/kid/1/limits/set", "OFF", false)

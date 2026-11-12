@@ -105,6 +105,8 @@ func (s *Server) routes() http.Handler {
 	page("POST /pcs/{pc}/kids/{kid}/{action}", s.kidAction)
 	page("POST /pcs/{pc}/requests/{id}/{action}", s.requestAction)
 	page("POST /pcs/{pc}/findings/dismiss", s.findingDismiss)
+	page("POST /pcs/{pc}/update", s.pcUpdate)
+	page("POST /updates/install", s.updateAll)
 	page("GET /history", s.historyPage)
 	page("GET /filters", s.filtersPage)
 	page("POST /filters/add", s.filterAdd)

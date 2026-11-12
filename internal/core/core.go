@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -26,7 +27,10 @@ type App struct {
 	DataDir string // for database size and backup cleanup ("" in tests)
 	YT      *ytmeta.Client
 	Updates *update.Checker
-	Now     func() time.Time
+	// Installer asks the root helper to install updates (nil: not on a
+	// real install, e.g. tests and dev runs).
+	Installer *update.Installer
+	Now       func() time.Time
 	// MQTT publishes an event to Home Assistant over MQTT (nil = off).
 	MQTT func(kind string, payload map[string]any) error
 
@@ -48,8 +52,12 @@ func New(st *store.Store) *App {
 			return s.UpdateCheck
 		},
 		OnNew: func(u update.Status) {
+			how := "On this PC run: sudo ytguard upgrade"
+			if a.Installer.Supported() {
+				how = "Install it from YTGuard's web page, the console or Home Assistant, or on this PC run: sudo ytguard upgrade"
+			}
 			a.Event("update_available", map[string]any{"current": u.Current, "latest": u.Latest, "url": u.URL, "notes": u.Notes,
-				"how": "On this PC run: sudo ytguard upgrade"})
+				"how": how})
 		},
 		Load: func() (update.Status, string) {
 			var saved updateState
@@ -61,6 +69,28 @@ func New(st *store.Store) *App {
 		},
 	}
 	return a
+}
+
+// ErrUpToDate means there's no newer release to install.
+var ErrUpToDate = errors.New("YTGuard is already up to date")
+
+// InstallUpdate checks GitHub and, if there's a newer release, asks the
+// root helper to install it. YTGuard restarts during the install.
+func (a *App) InstallUpdate(ctx context.Context) (update.Status, error) {
+	if !a.Installer.Supported() {
+		return update.Status{}, errors.New("one-click install isn't set up on this PC yet; an adult runs once: sudo ytguard upgrade")
+	}
+	if a.Installer.Status().Busy() {
+		return a.Updates.Status(), update.ErrInstallBusy
+	}
+	u := a.Updates.Check(ctx)
+	switch {
+	case u.Error != "":
+		return u, errors.New("couldn't check for updates: " + u.Error)
+	case !u.Available:
+		return u, ErrUpToDate
+	}
+	return u, a.Installer.Request()
 }
 
 type updateState struct {
@@ -212,9 +242,66 @@ func (a *App) Heartbeat(k store.Kid, m rules.Meta, playing, start bool) (timekee
 	return status, err
 }
 
-// AddBonus grants extra minutes today.
-func (a *App) AddBonus(kidID int64, minutes int, note string) error {
-	return a.St.AddGrant(kidID, timekeeper.Day(a.Now()), minutes, note)
+// MaxBonusMinutes bounds a single add or remove of time.
+const MaxBonusMinutes = 600
+
+// AddBonus grants extra minutes today, or takes time away when minutes is
+// negative. A removal is capped at the time the kid has left today, so the
+// limit never drops below what they've already used and a later add counts
+// in full. It returns the minutes actually applied.
+func (a *App) AddBonus(kidID int64, minutes int, note string) (int, error) {
+	if minutes == 0 || minutes > MaxBonusMinutes || minutes < -MaxBonusMinutes {
+		return 0, fmt.Errorf("minutes must be 1-%d, added or removed", MaxBonusMinutes)
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	now := a.Now()
+	day := timekeeper.Day(now)
+	if minutes < 0 {
+		st, err := a.St.State(kidID)
+		if err != nil {
+			return 0, err
+		}
+		sch := a.schedule(kidID, now)
+		timekeeper.Roll(&st, sch, now)
+		bonus, _ := a.St.BonusMinutes(kidID, day)
+		s := timekeeper.Evaluate(&st, sch, bonus, now)
+		if s.LimitSec < 0 {
+			return 0, errors.New("there's no daily limit today, so there's no time to remove")
+		}
+		left := max(0, s.LimitSec-s.UsedSec) / 60
+		if left == 0 {
+			return 0, errors.New("there's no time left today to remove")
+		}
+		minutes = max(minutes, -left)
+	}
+	return minutes, a.St.AddGrant(kidID, day, minutes, note)
+}
+
+// BonusFormMinutes reads the dashboard's add/remove time form: a "minutes"
+// amount and a "dir" of "remove" to take time away (anything else adds).
+func BonusFormMinutes(minutes, dir string) (int, error) {
+	n, err := strconv.Atoi(strings.TrimSpace(minutes))
+	if err != nil || n <= 0 || n > MaxBonusMinutes {
+		return 0, fmt.Errorf("enter a number of minutes from 1 to %d", MaxBonusMinutes)
+	}
+	if dir == "remove" {
+		n = -n
+	}
+	return n, nil
+}
+
+// BonusMessage describes an add/remove of time for the dashboard. asked is
+// what the parent entered; applied is what AddBonus actually did.
+func BonusMessage(who string, asked, applied int) string {
+	if applied >= 0 {
+		return fmt.Sprintf("Gave %s %d more minutes today.", who, applied)
+	}
+	msg := fmt.Sprintf("Took %d minutes off %s's time today.", -applied, who)
+	if applied != asked {
+		msg = fmt.Sprintf("Took %d minutes off %s's time today — all they had left.", -applied, who)
+	}
+	return msg
 }
 
 // Lock pauses YouTube for a kid for d (0 = until end of day).

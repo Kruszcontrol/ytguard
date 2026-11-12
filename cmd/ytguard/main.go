@@ -31,6 +31,7 @@ import (
 	"ytguard/internal/report"
 	"ytguard/internal/store"
 	"ytguard/internal/timekeeper"
+	"ytguard/internal/update"
 )
 
 const usage = `ytguard — family YouTube controls
@@ -76,8 +77,13 @@ func main() {
 		fs.BoolVar(&o.Check, "check", false, "only check whether a newer release exists")
 		fs.StringVar(&o.File, "file", "", "install this ytguard binary instead of downloading a release")
 		fs.BoolVar(&o.Yes, "y", false, "don't ask for confirmation")
+		requested := fs.Bool("requested", false, "used by ytguard-upgrade.service for one-click install from the web UI")
 		parseFlags(fs, args)
-		err = install.Upgrade(context.Background(), o)
+		if *requested {
+			err = install.UpgradeRequested(context.Background())
+		} else {
+			err = install.Upgrade(context.Background(), o)
+		}
 	case "uninstall":
 		fs := flag.NewFlagSet("uninstall", flag.ExitOnError)
 		purge := fs.Bool("purge", false, "also delete all data and the service user")
@@ -267,6 +273,7 @@ func serve(args []string) error {
 	}
 	app := core.New(st)
 	app.DataDir = *data
+	app.Installer = update.NewInstaller(*data)
 	au := auth.New(st)
 	if _, _, err := st.Admin(); errors.Is(err, store.ErrNotFound) {
 		slog.Warn("no parent login yet; run: sudo ytguard passwd --data " + *data)
